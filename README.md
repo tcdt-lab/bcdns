@@ -105,3 +105,6 @@ The domain revocation protocol and its conditions are described as follows:
 4. **Asset Removal on Root Network**:  
    If the root network detects a revoked domain, it initiates the removal of all associated asset references linked to the domain. This is done through an asset removal transaction to maintain data consistency across the architecture.
 
+## Licensing
+
+This project is licensed under the Apache License 2.0.
