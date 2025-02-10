@@ -13,7 +13,7 @@ COPY --from=builder /polkadot/target/release/node-template /usr/local/bin
 USER root
 RUN useradd -m -u 1001 -U -s /bin/sh -d /polkadot polkadot && \
 	mkdir -p /data /polkadot/.local/share && \
-	chown -R polkadot:polkadot /data && \
+	chown -R polkadot:polkadot /data /polkadot/.local/share && \
 	ln -s /data /polkadot/.local/share/polkadot && \
 # unclutter and minimize the attack surface
 	rm -rf /usr/bin /usr/sbin && \
