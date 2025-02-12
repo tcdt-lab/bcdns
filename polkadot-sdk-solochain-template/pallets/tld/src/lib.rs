@@ -1,48 +1,48 @@
 //! # TLD Pallet
 //!
 //! The TLD pallet enables the registration and management of top-level domain (TLD) networks on the blockchain.
-//! It facilitates the storage of TLD chain specifications and provides functionality for their modification and removal.
+//! It facilitates the storage of domain chain specifications and provides functionality for their modification and removal.
 //!
 //! ## Features
-//! - **Register TLDs**: Allows users to register unique TLDs with their associated chain specifications.
-//! - **Amend Chain Specifications**: Enables TLD owners to update their chain specifications.
-//! - **Revoke TLDs**: Provides TLD owners the ability to remove their TLD registrations.
-//! - **Expiration Management**: Ensures TLD entries expire at a specified block number unless renewed.
+//! - **Register domains**: Allows users to register unique domains with their associated chain specifications.
+//! - **Amend Chain Specifications**: Enables domain owners to update their chain specifications.
+//! - **Revoke domain**: Provides domain owners the ability to remove their domain registrations.
+//! - **Expiration Management**: Ensures domain entries expire at a specified block number unless renewed.
 //! - **Access Control**: Restricts actions based on ownership and account verification.
 //!
 //! ## Overview
-//! The pallet maintains mappings between TLD names and their metadata, including chain specifications, creators, and expiration blocks. Administrators or authorized users can perform the following operations:
-//! - Register a TLD with a unique name, chain specification, maintainer details, and an expiration block.
-//! - Update the chain specification for an existing TLD.
-//! - Remove expired or invalid TLDs.
+//! The pallet maintains mappings between domain names and their metadata, including chain specifications, creators, and expiration blocks. Administrators or authorized users can perform the following operations:
+//! - Register a unique domain name with a chain specification, maintainer details, and an expiration block.
+//! - Update the chain specification for an existing domain.
+//! - Remove expired or invalid domains.
 //!
 //! ## Extrinsics
-//! - **`register_domain`**: Registers a new TLD with specified details.
-//! - **`amend_chainspec`**: Updates the chain specification for an existing TLD.
-//! - **`revoke_domain`**: Removes a TLD from the registry.
+//! - **`register_domain`**: Registers a new domain with specified details.
+//! - **`amend_chainspec`**: Updates the chain specification for an existing domain.
+//! - **`revoke_domain`**: Removes a domain from the registry.
 //!
 //! ## Storage
-//! - **`DomainMap`**: Maps TLD names to their metadata, including creator, chain specification, maintainer, and availability.
-//! - **`DomainExpiry`**: Stores the block number at which a TLD registration expires.
+//! - **`DomainMap`**: Maps domain names to their metadata, including creator, chain specification, maintainer, and availability.
+//! - **`DomainExpiry`**: Stores the block number at which a domain registration expires.
 //!
 //! ## Events
-//! - **`DomainRegistered`**: Triggered when a TLD is successfully registered.
-//! - **`DomainAmended`**: Triggered when a TLD's chain specification is updated.
-//! - **`DomainRevoked`**: Triggered when a TLD is removed from the registry.
+//! - **`DomainRegistered`**: Triggered when a domain is successfully registered.
+//! - **`DomainAmended`**: Triggered when a domain's chain specification is updated.
+//! - **`DomainRevoked`**: Triggered when a domain is removed from the registry.
 //!
 //! ## Errors
-//! - **`DomainNameTooLong`**: The provided TLD name exceeds the maximum allowed length.
+//! - **`DomainNameTooLong`**: The provided domain name exceeds the maximum allowed length.
 //! - **`ChainSpecTooLarge`**: The chain specification exceeds the maximum allowed size.
 //! - **`MaintainerTooLarge`**: The maintainer details exceed the maximum allowed size.
-//! - **`DomainAlreadyExists`**: The specified TLD is already registered.
-//! - **`DomainNotFound`**: The specified TLD does not exist.
-//! - **`DomainExpired`**: The TLD registration has expired.
-//! - **`InvalidOwnerId`**: The caller does not own the specified TLD.
+//! - **`DomainAlreadyExists`**: The specified domain is already registered.
+//! - **`DomainNotFound`**: The specified domain does not exist.
+//! - **`DomainExpired`**: The domain registration has expired.
+//! - **`InvalidOwnerId`**: The caller does not own the specified domain.
 //!
 //! ## Usage
-//! 1. **Register a TLD**: Call `register_domain` with a unique TLD name, valid chain specification, maintainer details, and an expiration block.
-//! 2. **Amend Chain Specification**: Call `amend_chainspec` to update the chain specification of an existing TLD.
-//! 3. **Revoke a TLD**: Use `revoke_domain` to remove an existing TLD from the registry.
+//! 1. **Register a Domain**: Call `register_domain` with a unique domain name, valid chain specification, maintainer details, and an expiration block.
+//! 2. **Amend Chain Specification**: Call `amend_chainspec` to update the chain specification of an existing domain.
+//! 3. **Revoke a domain**: Use `revoke_domain` to remove an existing domain from the registry.
 //!
 //! ## Note
 //! Run `cargo doc --package pallet-tld --open` to view the complete documentation for this pallet.
