@@ -167,6 +167,7 @@ impl pallet_rootdns::Config for Runtime {
     type AdminOrigin = frame_system::EnsureRoot<AccountId>;
     type MaxTLDNameLength = ConstU32<16>;
     type MaxChainSpecSize = ConstU32<256>;
+    type MinChainSpecSize = ConstU32<16>;
 }
 
 impl pallet_tld::Config for Runtime {

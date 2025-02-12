@@ -53,6 +53,7 @@ impl pallet_rootdns::Config for Test {
     type AdminOrigin = frame_system::EnsureRoot<u64>;
     type MaxTLDNameLength = ConstU32<16>;
     type MaxChainSpecSize = ConstU32<256>;
+    type MinChainSpecSize = ConstU32<16>;
 }
 
 // Build genesis storage according to the mock runtime.

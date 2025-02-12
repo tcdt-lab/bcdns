@@ -64,6 +64,9 @@ pub mod pallet {
         /// Maximum size allowed for the chain specification.
         #[pallet::constant]
         type MaxChainSpecSize: Get<u32>;
+        /// Minimum size for the chain specification.
+        #[pallet::constant]
+        type MinChainSpecSize: Get<u32>;
     }
 
     // Type aliases
@@ -107,6 +110,8 @@ pub mod pallet {
         TLDNameTooLong,
         /// The chain specification exceeds the maximum allowed size.
         ChainSpecTooLarge,
+        /// The provided chain specification is too small.
+        ChainSpecTooSmall,
         /// The specified TLD does not exist.
         TLDNotFound,
     }
@@ -141,6 +146,10 @@ pub mod pallet {
             ensure!(
                 chain_spec.len() <= T::MaxChainSpecSize::get() as usize,
                 Error::<T>::ChainSpecTooLarge
+            );
+            ensure!(
+                chain_spec.len() >= T::MinChainSpecSize::get() as usize,
+                Error::<T>::ChainSpecTooSmall
             );
 
             // Check if the TLD already exists
