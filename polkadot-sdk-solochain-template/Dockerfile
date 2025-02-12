@@ -25,4 +25,4 @@ USER polkadot
 EXPOSE 30333 9933 9944 9615
 VOLUME ["/data"]
 
-ENTRYPOINT ["/usr/local/bin/node-template"]
+ENTRYPOINT ["/usr/local/bin/node-template", "--dev"]
