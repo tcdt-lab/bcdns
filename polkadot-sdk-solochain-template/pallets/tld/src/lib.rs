@@ -68,14 +68,13 @@ pub mod pallet {
     use crate::{SubstrateWeight, WeightInfo};
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
-    use scale_info::prelude::vec::Vec;
 
     #[pallet::pallet]
     #[pallet::without_storage_info]
     pub struct Pallet<T>(_);
 
     #[pallet::config]
-    pub trait Config: frame_system::Config {
+    pub trait Config: frame_system::Config + TypeInfo {
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
         type WeightInfo: WeightInfo;
         #[pallet::constant]
@@ -86,19 +85,24 @@ pub mod pallet {
         type MaxMaintainerSize: Get<u32>;
     }
 
+    // Type aliases
+    type DomainName<T> = BoundedVec<u8, <T as Config>::MaxDomainLength>;
+    type ChainSpec<T> = BoundedVec<u8, <T as Config>::MaxChainSpecSize>;
+    type Maintainer<T> = BoundedVec<u8, <T as Config>::MaxMaintainerSize>;
+
     #[derive(Debug, Encode, Decode, Clone, PartialEq, Default, TypeInfo)]
-    pub struct DomainInfo<AccountId> {
-        pub creator: AccountId, // Account that created the domain
-        pub chain_spec: Vec<u8>, // Blockchain chain specification
-        pub maintainer: Vec<u8>, // Maintainer's details
-        pub available: bool,     // Indicates if the domain is active
+    pub struct DomainInfo<T: Config> {
+        pub creator: T::AccountId,     // Account that created the domain
+        pub chain_spec: ChainSpec<T>,  // Blockchain chain specification
+        pub maintainer: Maintainer<T>, // Maintainer's details
+        pub available: bool,           // Indicates if the domain is active
     }
 
-    impl<AccountId> DomainInfo<AccountId> {
+    impl<T: Config> DomainInfo<T> {
         pub fn new(
-            creator: AccountId,
-            chain_spec: Vec<u8>,
-            maintainer: Vec<u8>,
+            creator: T::AccountId,
+            chain_spec: ChainSpec<T>,
+            maintainer: Maintainer<T>,
             available: bool,
         ) -> Self {
             Self {
@@ -114,13 +118,13 @@ pub mod pallet {
     #[pallet::storage]
     #[pallet::getter(fn domain_map)]
     pub(super) type DomainMap<T: Config> =
-    StorageMap<_, Blake2_128Concat, Vec<u8>, DomainInfo<T::AccountId>, OptionQuery>;
+        StorageMap<_, Blake2_128Concat, DomainName<T>, DomainInfo<T>, OptionQuery>;
 
     // Tracks the expiration block of each domain
     #[pallet::storage]
     #[pallet::getter(fn domain_expiry)]
     pub(super) type DomainExpiry<T: Config> =
-    StorageMap<_, Blake2_128Concat, Vec<u8>, BlockNumberFor<T>, OptionQuery>;
+        StorageMap<_, Blake2_128Concat, DomainName<T>, BlockNumberFor<T>, OptionQuery>;
 
     // Tracks pending domain ownership transfers
     #[pallet::storage]
@@ -128,8 +132,8 @@ pub mod pallet {
     pub(super) type PendingTransfers<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
-        Vec<u8>,      // Domain name
-        T::AccountId, // New owner
+        DomainName<T>, // Domain name
+        T::AccountId,  // New owner
         OptionQuery,
     >;
 
@@ -138,29 +142,29 @@ pub mod pallet {
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
         DomainRegistered {
-            domain_name: Vec<u8>, // Domain name being registered
-            creator: T::AccountId, // Creator's account
+            domain_name: DomainName<T>, // Domain name being registered
+            creator: T::AccountId,      // Creator's account
         },
         DomainAmended {
-            domain_name: Vec<u8>, // Domain name being amended
-            editor: T::AccountId, // Editor's account
+            domain_name: DomainName<T>, // Domain name being amended
+            editor: T::AccountId,       // Editor's account
         },
         DomainRevoked {
-            domain_name: Vec<u8>, // Domain name being revoked
-            revoker: T::AccountId, // Revoker's account
+            domain_name: DomainName<T>, // Domain name being revoked
+            revoker: T::AccountId,      // Revoker's account
         },
         TransferInitiated {
-            domain_name: Vec<u8>, // Domain name for transfer
-            from: T::AccountId,   // Transferor account
-            to: T::AccountId,     // Transferee account
+            domain_name: DomainName<T>, // Domain name for transfer
+            from: T::AccountId,         // Transferor account
+            to: T::AccountId,           // Transferee account
         },
         TransferAccepted {
-            domain_name: Vec<u8>, // Domain name for transfer acceptance
-            new_owner: T::AccountId, // New owner account
+            domain_name: DomainName<T>, // Domain name for transfer acceptance
+            new_owner: T::AccountId,    // New owner account
         },
         TransferRevoked {
-            domain_name: Vec<u8>, // Domain name transfer revoked
-            owner: T::AccountId,  // Owner's account
+            domain_name: DomainName<T>, // Domain name transfer revoked
+            owner: T::AccountId,        // Owner's account
         },
     }
 
@@ -188,9 +192,9 @@ pub mod pallet {
         #[pallet::weight(<SubstrateWeight<T> as WeightInfo>::benchmark_register_domain())]
         pub fn register_domain(
             origin: OriginFor<T>,
-            domain_name: Vec<u8>,
-            chain_spec: Vec<u8>,
-            maintainer: Vec<u8>,
+            domain_name: DomainName<T>,
+            chain_spec: ChainSpec<T>,
+            maintainer: Maintainer<T>,
             expiry: BlockNumberFor<T>,
         ) -> DispatchResult {
             let who = ensure_signed(origin)?;
@@ -220,8 +224,8 @@ pub mod pallet {
         #[pallet::weight(<SubstrateWeight<T> as WeightInfo>::benchmark_amend_chainspec())]
         pub fn amend_chainspec(
             origin: OriginFor<T>,
-            domain_name: Vec<u8>,
-            chain_spec: Vec<u8>,
+            domain_name: DomainName<T>,
+            chain_spec: ChainSpec<T>,
         ) -> DispatchResult {
             let who = ensure_signed(origin)?;
 
@@ -244,7 +248,7 @@ pub mod pallet {
         // Revoke a domain from the registry
         #[pallet::call_index(2)]
         #[pallet::weight(<SubstrateWeight<T> as WeightInfo>::benchmark_revoke_domain())]
-        pub fn revoke_domain(origin: OriginFor<T>, domain_name: Vec<u8>) -> DispatchResult {
+        pub fn revoke_domain(origin: OriginFor<T>, domain_name: DomainName<T>) -> DispatchResult {
             let who = ensure_signed(origin)?;
 
             let domain_info =
@@ -268,7 +272,7 @@ pub mod pallet {
         #[pallet::weight(<SubstrateWeight<T> as WeightInfo>::benchmark_initiate_transfer())]
         pub fn initiate_transfer(
             origin: OriginFor<T>,
-            domain_name: Vec<u8>,
+            domain_name: DomainName<T>,
             new_owner: T::AccountId,
         ) -> DispatchResult {
             let who = ensure_signed(origin)?;
@@ -296,7 +300,7 @@ pub mod pallet {
         // Accept a pending transfer of domain ownership
         #[pallet::call_index(4)]
         #[pallet::weight(<SubstrateWeight<T> as WeightInfo>::benchmark_accept_transfer())]
-        pub fn accept_transfer(origin: OriginFor<T>, domain_name: Vec<u8>) -> DispatchResult {
+        pub fn accept_transfer(origin: OriginFor<T>, domain_name: DomainName<T>) -> DispatchResult {
             let who = ensure_signed(origin)?;
 
             let new_owner =
@@ -322,7 +326,7 @@ pub mod pallet {
         // Revoke a pending domain transfer
         #[pallet::call_index(5)]
         #[pallet::weight(<SubstrateWeight<T> as WeightInfo>::benchmark_revoke_transfer())]
-        pub fn revoke_transfer(origin: OriginFor<T>, domain_name: Vec<u8>) -> DispatchResult {
+        pub fn revoke_transfer(origin: OriginFor<T>, domain_name: DomainName<T>) -> DispatchResult {
             let who = ensure_signed(origin)?;
 
             let domain_info =
@@ -348,7 +352,7 @@ pub mod pallet {
 
     impl<T: Config> Pallet<T> {
         // Ensure that the domain has not expired
-        fn ensure_not_expired(domain_name: &Vec<u8>) -> DispatchResult {
+        fn ensure_not_expired(domain_name: &DomainName<T>) -> DispatchResult {
             let expiry = DomainExpiry::<T>::get(domain_name).ok_or(Error::<T>::DomainNotFound)?;
             ensure!(
                 frame_system::Pallet::<T>::block_number() < expiry,

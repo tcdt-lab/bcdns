@@ -46,14 +46,13 @@ pub mod pallet {
     use super::*;
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
-    use scale_info::prelude::{vec, vec::Vec};
 
     #[pallet::pallet]
     #[pallet::without_storage_info]
     pub struct Pallet<T>(_);
 
     #[pallet::config]
-    pub trait Config: frame_system::Config {
+    pub trait Config: frame_system::Config + TypeInfo {
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
         type WeightInfo: WeightInfo;
         /// Origin that is allowed to manage TLDs (e.g., remove invalid ones).
@@ -67,10 +66,14 @@ pub mod pallet {
         type MaxChainSpecSize: Get<u32>;
     }
 
+    // Type aliases
+    type TLDName<T> = BoundedVec<u8, <T as Config>::MaxTLDNameLength>;
+    type ChainSpec<T> = BoundedVec<u8, <T as Config>::MaxChainSpecSize>;
+
     #[derive(Encode, Decode, Clone, PartialEq, Default, TypeInfo)]
-    pub struct TLDInfo {
+    pub struct TLDInfo<T: Config> {
         // The chain specification of the TLD network
-        pub chain_spec: Vec<u8>,
+        pub chain_spec: ChainSpec<T>,
     }
 
     /// TLDMap stores the chain specification of the TLD network.
@@ -79,8 +82,8 @@ pub mod pallet {
     pub(super) type TLDMap<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
-        Vec<u8>, // The TLD name
-        TLDInfo,
+        TLDName<T>, // The TLD name
+        TLDInfo<T>,
         OptionQuery,
     >;
 
@@ -89,11 +92,11 @@ pub mod pallet {
     pub enum Event<T: Config> {
         /// A new TLD has been registered.
         TLDRegistered {
-            tld_name: Vec<u8>,
+            tld_name: TLDName<T>,
             creator: T::AccountId,
         },
         /// A TLD has been removed.
-        TLDRemoved { tld_name: Vec<u8> },
+        TLDRemoved { tld_name: TLDName<T> },
     }
 
     #[pallet::error]
@@ -110,8 +113,11 @@ pub mod pallet {
 
     impl<T: Config> Pallet<T> {
         /// Get the chain specification of the TLD network.
-        pub fn get_chainspec_for_tld(tld: &[u8]) -> Option<TLDInfo> {
-            TLDMap::<T>::get(tld.to_vec())
+        pub fn get_chainspec_for_tld(tld: &[u8]) -> Option<TLDInfo<T>> {
+            let bounded_tld: TLDName<T> = BoundedVec::try_from(tld.to_vec())
+                .map_err(|_| Error::<T>::TLDNameTooLong)
+                .ok()?;
+            TLDMap::<T>::get(bounded_tld)
         }
     }
 
@@ -122,8 +128,8 @@ pub mod pallet {
         #[pallet::weight(<SubstrateWeight<T> as WeightInfo>::benchmark_register_tld())]
         pub fn register_tld(
             origin: OriginFor<T>,
-            tld_name: Vec<u8>,
-            chain_spec: Vec<u8>,
+            tld_name: TLDName<T>,
+            chain_spec: ChainSpec<T>,
         ) -> DispatchResult {
             let who = ensure_signed(origin)?;
 
@@ -159,7 +165,7 @@ pub mod pallet {
         /// Remove an existing TLD (admin-only).
         #[pallet::call_index(1)]
         #[pallet::weight(<SubstrateWeight<T> as WeightInfo>::benchmark_remove_tld())]
-        pub fn remove_tld(origin: OriginFor<T>, tld_name: Vec<u8>) -> DispatchResult {
+        pub fn remove_tld(origin: OriginFor<T>, tld_name: TLDName<T>) -> DispatchResult {
             T::AdminOrigin::ensure_origin(origin)?;
 
             ensure!(

@@ -53,7 +53,7 @@ impl pallet_tld::Config for Test {
     type WeightInfo = pallet_tld::weights::SubstrateWeight<Test>;
     type MaxDomainLength = ConstU32<16>;
     type MaxChainSpecSize = ConstU32<256>;
-    type MaxMaintainerSize = ConstU32<4>;
+    type MaxMaintainerSize = ConstU32<16>;
 }
 
 // Build genesis storage according to the mock runtime.

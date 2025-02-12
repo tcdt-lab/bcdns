@@ -2,18 +2,20 @@
 
 use super::*;
 use crate::mock::{new_test_ext, RuntimeOrigin, Test, TldModule};
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, BoundedVec};
 
 #[test]
 fn register_domain_works() {
     new_test_ext().execute_with(|| {
-        let domain_name: Vec<u8> = "example".as_bytes().to_vec().try_into().unwrap();
-        let chain_spec = "{\"key\":\"value\"}"
+        let domain_name: BoundedVec<u8, <Test as Config>::MaxDomainLength> =
+            "example".as_bytes().to_vec().try_into().unwrap();
+        let chain_spec: BoundedVec<u8, <Test as Config>::MaxChainSpecSize> = "{\"key\":\"value\"}"
             .as_bytes()
             .to_vec()
             .try_into()
             .unwrap();
-        let maintainer = "maintainer_id".as_bytes().to_vec().try_into().unwrap();
+        let maintainer: BoundedVec<u8, <Test as Config>::MaxMaintainerSize> =
+            "maintainer_id".as_bytes().to_vec().try_into().unwrap();
         let expiry = 100u64;
 
         assert_ok!(TldModule::register_domain(
@@ -31,18 +33,21 @@ fn register_domain_works() {
 #[test]
 fn amend_chainspec_works() {
     new_test_ext().execute_with(|| {
-        let domain_name: Vec<u8> = "example".as_bytes().to_vec().try_into().unwrap();
-        let chain_spec = "{\"key\":\"value\"}"
+        let domain_name: BoundedVec<u8, <Test as Config>::MaxDomainLength> =
+            "example".as_bytes().to_vec().try_into().unwrap();
+        let chain_spec: BoundedVec<u8, <Test as Config>::MaxChainSpecSize> = "{\"key\":\"value\"}"
             .as_bytes()
             .to_vec()
             .try_into()
             .unwrap();
-        let new_chain_spec: Vec<u8> = "{\"key\":\"new_value\"}"
-            .as_bytes()
-            .to_vec()
-            .try_into()
-            .unwrap();
-        let maintainer = "maintainer_id".as_bytes().to_vec().try_into().unwrap();
+        let new_chain_spec: BoundedVec<u8, <Test as Config>::MaxChainSpecSize> =
+            "{\"key\":\"new_value\"}"
+                .as_bytes()
+                .to_vec()
+                .try_into()
+                .unwrap();
+        let maintainer: BoundedVec<u8, <Test as Config>::MaxMaintainerSize> =
+            "maintainer_id".as_bytes().to_vec().try_into().unwrap();
         let expiry = 100u64;
 
         TldModule::register_domain(
@@ -67,13 +72,15 @@ fn amend_chainspec_works() {
 #[test]
 fn revoke_domain_works() {
     new_test_ext().execute_with(|| {
-        let domain_name: Vec<u8> = "example".as_bytes().to_vec().try_into().unwrap();
-        let chain_spec = "{\"key\":\"value\"}"
+        let domain_name: BoundedVec<u8, <Test as Config>::MaxDomainLength> =
+            "example".as_bytes().to_vec().try_into().unwrap();
+        let chain_spec: BoundedVec<u8, <Test as Config>::MaxChainSpecSize> = "{\"key\":\"value\"}"
             .as_bytes()
             .to_vec()
             .try_into()
             .unwrap();
-        let maintainer = "maintainer_id".as_bytes().to_vec().try_into().unwrap();
+        let maintainer: BoundedVec<u8, <Test as Config>::MaxMaintainerSize> =
+            "maintainer_id".as_bytes().to_vec().try_into().unwrap();
         let expiry = 100u64;
 
         TldModule::register_domain(
@@ -98,9 +105,12 @@ fn test_initiate_transfer() {
     new_test_ext().execute_with(|| {
         let caller = 1u64; // Account ID of caller
         let new_owner = 2u64; // Account ID of the new owner
-        let domain_name = b"example-domain".to_vec();
-        let chain_spec = b"example-spec".to_vec();
-        let maintainer = b"maintainer".to_vec();
+        let domain_name: BoundedVec<u8, <Test as Config>::MaxDomainLength> =
+            b"example-domain".to_vec().try_into().unwrap();
+        let chain_spec: BoundedVec<u8, <Test as Config>::MaxChainSpecSize> =
+            b"example-spec".to_vec().try_into().unwrap();
+        let maintainer: BoundedVec<u8, <Test as Config>::MaxMaintainerSize> =
+            b"maintainer".to_vec().try_into().unwrap();
         let expiry = 200;
 
         // Register the domain
@@ -123,9 +133,7 @@ fn test_initiate_transfer() {
         ));
 
         // Verify the transfer was added to `PendingTransfers`
-        assert!(PendingTransfers::<Test>::contains_key(
-            &domain_name
-        ));
+        assert!(PendingTransfers::<Test>::contains_key(&domain_name));
         assert_eq!(
             PendingTransfers::<Test>::get(&domain_name).unwrap(),
             new_owner
@@ -138,9 +146,12 @@ fn test_accept_transfer() {
     new_test_ext().execute_with(|| {
         let caller = 1u64; // Account ID of caller
         let new_owner = 2u64; // Account ID of the new owner
-        let domain_name = b"example-accept".to_vec();
-        let chain_spec = b"example-spec".to_vec();
-        let maintainer = b"maintainer".to_vec();
+        let domain_name: BoundedVec<u8, <Test as Config>::MaxDomainLength> =
+            b"example-accept".to_vec().try_into().unwrap();
+        let chain_spec: BoundedVec<u8, <Test as Config>::MaxChainSpecSize> =
+            b"example-spec".to_vec().try_into().unwrap();
+        let maintainer: BoundedVec<u8, <Test as Config>::MaxMaintainerSize> =
+            b"maintainer".to_vec().try_into().unwrap();
         let expiry = 200;
 
         // Register the domain
@@ -169,9 +180,7 @@ fn test_accept_transfer() {
         ));
 
         // Verify the transfer was removed from `PendingTransfers`
-        assert!(!PendingTransfers::<Test>::contains_key(
-            &domain_name
-        ));
+        assert!(!PendingTransfers::<Test>::contains_key(&domain_name));
 
         // Verify the new owner was updated
         let domain_info = DomainMap::<Test>::get(&domain_name).unwrap();
@@ -184,9 +193,12 @@ fn test_revoke_transfer() {
     new_test_ext().execute_with(|| {
         let caller = 1u64; // Account ID of caller
         let new_owner = 2u64; // Account ID of the new owner
-        let domain_name = b"example-revoke".to_vec();
-        let chain_spec = b"example-spec".to_vec();
-        let maintainer = b"maintainer".to_vec();
+        let domain_name: BoundedVec<u8, <Test as Config>::MaxDomainLength> =
+            b"example-revoke".to_vec().try_into().unwrap();
+        let chain_spec: BoundedVec<u8, <Test as Config>::MaxChainSpecSize> =
+            b"example-spec".to_vec().try_into().unwrap();
+        let maintainer: BoundedVec<u8, <Test as Config>::MaxMaintainerSize> =
+            b"maintainer".to_vec().try_into().unwrap();
         let expiry = 200;
 
         // Register the domain
@@ -224,9 +236,12 @@ fn test_initiate_transfer_no_permission() {
     new_test_ext().execute_with(|| {
         let caller = 1u64;
         let not_creator = 3u64;
-        let domain_name = b"no-permission".to_vec();
-        let chain_spec = b"example-spec".to_vec();
-        let maintainer = b"maintainer".to_vec();
+        let domain_name: BoundedVec<u8, <Test as Config>::MaxDomainLength> =
+            b"no-permission".to_vec().try_into().unwrap();
+        let chain_spec: BoundedVec<u8, <Test as Config>::MaxChainSpecSize> =
+            b"example-spec".to_vec().try_into().unwrap();
+        let maintainer: BoundedVec<u8, <Test as Config>::MaxMaintainerSize> =
+            b"maintainer".to_vec().try_into().unwrap();
         let expiry = 200;
 
         // Register the domain
@@ -256,9 +271,12 @@ fn test_accept_transfer_no_permission() {
         let caller = 1u64;
         let new_owner = 2u64;
         let not_recipient = 3u64;
-        let domain_name = b"wrong-recipient".to_vec();
-        let chain_spec = b"example-spec".to_vec();
-        let maintainer = b"maintainer".to_vec();
+        let domain_name: BoundedVec<u8, <Test as Config>::MaxDomainLength> =
+            b"wrong-recipient".to_vec().try_into().unwrap();
+        let chain_spec: BoundedVec<u8, <Test as Config>::MaxChainSpecSize> =
+            b"example-spec".to_vec().try_into().unwrap();
+        let maintainer: BoundedVec<u8, <Test as Config>::MaxMaintainerSize> =
+            b"maintainer".to_vec().try_into().unwrap();
         let expiry = 200;
 
         // Register the domain
