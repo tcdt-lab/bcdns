@@ -49,20 +49,22 @@ exports.connectToNetwork = async (bootNodeList) => {
 exports.getTLDSpec = async (tld, rootSpec) => {
     try {
         let api = await this.connector.connectToNetwork(rootSpec);
-        let res = await api.query.rootDNSModule.tldMap(tld);
-        return res.toHuman().chainSpec;
+        let res = await api.query.dnsModule.tld(tld);
+        const chainSpec = res.toHuman().chainSpec;
+        return typeof chainSpec === 'string' ? JSON.parse(chainSpec) : chainSpec;
     } catch (err) {
-        throw new Error("Could not connect to root DNS network.");
+        throw err; // Propagate the original error
     }
 }
 
 exports.getTargetSpec = async (domain, tldSpec) => {
     try {
         let api = await this.connector.connectToNetwork(tldSpec);
-        let res = await api.query.tldModule.domainMap(domain);
-        return res.toHuman().chainSpec;
+        let res = await api.query.dnsModule.domain(domain);
+        const chainSpec = res.toHuman().chainSpec;
+        return typeof chainSpec === 'string' ? JSON.parse(chainSpec) : chainSpec;
     } catch (err) {
-        throw new Error("Could not connect to the TLD network.");
+        throw err; // Propagate the original error
     }
 }
 

@@ -28,15 +28,21 @@ class NetworkConnector {
         }
 
         let api = null;
+        let lastError = null;
         // Try connecting to a random boot node until successful
-        while (!api) {
+        for (let i = 0; i < bootNodeList.length; i++) {
             let node = bootNodeList[Math.floor(Math.random() * bootNodeList.length)];
             console.log(`Trying to connect to ${node}`);
-            api = await polkadotConnect(this.#getConnectionAddress(node)); // Attempt connection
+            try {
+                api = await polkadotConnect(this.#getConnectionAddress(node)); // Attempt connection
+                break;
+            } catch (err) {
+                lastError = err;
+            }
         }
 
         if (!api) {
-            throw new Error("CONNECTION_ERROR"); // Throw error if no connection is made
+            throw lastError || new Error("Failed to connect to any boot node"); // Throw error if no connection is made
         }
 
         this.apiCache[networkId] = api; // Cache the successful API connection
@@ -47,13 +53,14 @@ class NetworkConnector {
      * Constructs a connection address from the boot node's multi-address.
      * 
      * @param {string} bootNodeMPAddr - The boot node multi-address.
-     * @returns {string} The connection address in `http://<addr>:<port>` format.
+     * @returns {string} The connection address in `ws://<addr>:<port>` format for WebSocket or `http://<addr>:<port>` for HTTP.
      */
     #getConnectionAddress(bootNodeMPAddr) {
         let addrSpl = bootNodeMPAddr.split('/');
         let addr = addrSpl[2]; // Extracts the address part
         let port = addrSpl[4]; // Extracts the port part
-        return `http://${addr}:${port}`; // Constructs the connection address
+        let protocol = addrSpl[addrSpl.length - 1] === 'ws' ? 'ws' : 'http';
+        return `${protocol}://${addr}:${port}`; // Constructs the connection address
     }
 
     /**
@@ -91,6 +98,6 @@ class NetworkConnector {
  * Factory function to create a new NetworkConnector instance.
  * @returns {NetworkConnector} A new instance of the NetworkConnector class.
  */
-exports.createNetworkConnector = () => {
-    return new NetworkConnector();
+module.exports = {
+    createNetworkConnector: () => new NetworkConnector()
 };
