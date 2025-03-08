@@ -52,6 +52,8 @@ The resolution protocol adheres to the following three steps:
 3. **Target Network Connection**:  
    The client uses the connection details from the TLD network to establish a direct connection with the **target network**. Once resolved, the connection details can be cached locally for future use, improving resolution efficiency for subsequent queries.
 
+The implementation of the resolution protocol can be found in [dns_client](./dns_client/dns/resolver.js#L49-L61) and [dns_client_golang](./dns_client_golang/substrate/connect.go#L73-L94).
+
 ### Domain Registration Protocol
 
 ![domain registration protocol](./img/registration_protocol.png)
@@ -68,6 +70,8 @@ The registration protocol can be described as follows:
    If the desired domain is already claimed, the network may decide on an alternative domain through its consensus mechanism. The process is repeated by querying the root layer and submitting a new transaction to the TLD network associated with the alternative domain. 
 
 This protocol ensures that domains are registered on a **first-come, first-served** basis in a decentralized environment without relying on centralized registrars, incurring only the transaction fees for the registration process.
+
+The implementation of the registration extrinsic can be found in the [tld-pallet](./polkadot-sdk-solochain-template/pallets/tld/src/lib.rs#L193-L220), and the implementation of the registration through the dns client can be found in [dns_client](./dns_client/dns/registry.js#L96-L120).
 
 ### Domain Transfer Protocol
 
@@ -87,6 +91,8 @@ The domain transfer protocol is as follows:
 4. **Optional Cancellation by Initiator**:  
    If the initiator (BC1 Node) decides to cancel the transfer **before the recipient accepts**, it can submit a cancellation request to the TLD network. This step will remove the pending transfer and halt the process.
 
+The implementation of the domain revocation extrinsic can be found in the [tld-pallet](./polkadot-sdk-solochain-template/pallets/tld/src/lib.rs#L269-L323).
+
 ### Domain Revocation Protocol
 
 ![domain revocation protocol](./img/domain_revocation_protocol.png)
@@ -104,6 +110,8 @@ The domain revocation protocol and its conditions are described as follows:
 
 4. **Asset Removal on Root Network**:  
    If the root network detects a revoked domain, it initiates the removal of all associated asset references linked to the domain. This is done through an asset removal transaction to maintain data consistency across the architecture.
+
+The implementation of the domain revocation extrinsic can be found in the [tld-pallet](./polkadot-sdk-solochain-template/pallets/tld/src/lib.rs#L247-L267).
 
 ## Testing
 
