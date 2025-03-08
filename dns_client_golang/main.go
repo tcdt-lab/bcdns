@@ -12,7 +12,7 @@ import (
 	"github.com/khalidzahra/dns_client/substrate"
 )
 
-func fetchSingleSpec(domain string, idx int, connector *substrate.SubstrateConnector, eval bool) (int, int64) {
+func fetchSingleSpec(domain string, idx int, connector substrate.SubstrateInterface, eval bool) (int, int64) {
 	start := time.Now()
 	fmt.Println(start.UnixMilli())
 	target, err := connector.ResolveDomain(domain, eval)
@@ -47,10 +47,8 @@ func fetchSpec(domain string, runs, runsPerSecond int, outFile string, evalFlag,
 
 	if evalFlag {
 		for i := 0; i < runs; i++ {
-			select {
-			case result := <-resultChan:
-				resultArr = append(resultArr, result)
-			}
+			result := <-resultChan
+			resultArr = append(resultArr, result)
 		}
 
 		eval.WriteToCSV(outFile, resultArr)

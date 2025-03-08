@@ -2,10 +2,10 @@ module github.com/khalidzahra/dns_client
 
 go 1.22.4
 
+require github.com/centrifuge/go-substrate-rpc-client/v4 v4.2.1
+
 require (
 	github.com/ChainSafe/go-schnorrkel v1.0.0 // indirect
-	github.com/centrifuge/go-substrate-rpc-client v2.0.0+incompatible
-	github.com/centrifuge/go-substrate-rpc-client/v4 v4.2.1 // indirect
 	github.com/cosmos/go-bip39 v1.0.0 // indirect
 	github.com/deckarep/golang-set v1.8.0 // indirect
 	github.com/decred/base58 v1.0.4 // indirect

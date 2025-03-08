@@ -29,15 +29,19 @@ type TldRes struct {
 
 // SubstrateConnector is responsible for managing interactions with Substrate nodes.
 type SubstrateConnector struct {
-	rootSpecUrl       string
-	apiCache          map[string]*gsrpc.SubstrateAPI
-	rootBootnodeIndex int
-	tldBootnodeIndex  map[string]int
-	metadataRegistry  map[string]*types.Metadata
-	useCache          bool
-	m                 sync.RWMutex
-	rootLock          sync.RWMutex
-	tldLocks          map[string]*sync.RWMutex
+	rootSpecUrl         string
+	apiCache            map[string]*gsrpc.SubstrateAPI
+	rootBootnodeIndex   int
+	tldBootnodeIndex    map[string]int
+	metadataRegistry    map[string]*types.Metadata
+	useCache            bool
+	m                   sync.RWMutex
+	rootLock            sync.RWMutex
+	tldLocks            map[string]*sync.RWMutex
+	// Function fields for easier testing
+	getTldFromRootFunc  func(rootSpec ChainSpecRes, keyParam string) (*TldRes, error)
+	getTargetFromTldFunc func(tldSpec ChainSpecRes, keyParam string) (*DomainRes, error)
+	getSubstrateApiFunc func(spec ChainSpecRes, bootNodeIndex int) (*gsrpc.SubstrateAPI, error)
 }
 
 var (
@@ -46,7 +50,7 @@ var (
 
 // NewSubstrateConnector creates and initializes a new SubstrateConnector.
 func NewSubstrateConnector(useCache bool) *SubstrateConnector {
-	return &SubstrateConnector{
+	connector := &SubstrateConnector{
 		rootSpecUrl:       os.Getenv("ROOT_SPEC_URL"),
 		apiCache:          make(map[string]*gsrpc.SubstrateAPI),
 		rootBootnodeIndex: 0,
@@ -55,6 +59,13 @@ func NewSubstrateConnector(useCache bool) *SubstrateConnector {
 		useCache:          useCache,
 		tldLocks:          make(map[string]*sync.RWMutex),
 	}
+	
+	// Set default function implementations
+	connector.getTldFromRootFunc = connector.getTldFromRoot
+	connector.getTargetFromTldFunc = connector.getTargetFromTld
+	connector.getSubstrateApiFunc = connector.getSubstrateApi
+	
+	return connector
 }
 
 // ResolveDomain resolves a domain and fetches its associated chain specification.
@@ -101,7 +112,7 @@ func (c *SubstrateConnector) resolveTldSpec(tld string, eval bool) (*ChainSpecRe
 		return nil, err
 	}
 
-	tldRes, err = c.getTldFromRoot(*rootSpec, tld)
+	tldRes, err = c.getTldFromRootFunc(*rootSpec, tld)
 
 	if err != nil {
 		return nil, err
@@ -116,7 +127,7 @@ func (c *SubstrateConnector) resolveTldSpec(tld string, eval bool) (*ChainSpecRe
 // resolveTargetSpec resolves the chain specification for a specific domain.
 func (c *SubstrateConnector) resolveTargetSpec(tldSpec ChainSpecRes, domain string, eval bool) (*ChainSpecRes, error) {
 
-	domainRes, err := c.getTargetFromTld(tldSpec, domain)
+	domainRes, err := c.getTargetFromTldFunc(tldSpec, domain)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +184,7 @@ func (c *SubstrateConnector) RegisterAsset(domain, assetName string, nonce uint3
 	registerAssetTx := "AssetDiscoveryModule.register_asset_for_domain"
 
 	c.rootLock.RLock()
-	api, err := c.getSubstrateApi(*rootSpec, c.rootBootnodeIndex)
+	api, err := c.getSubstrateApiFunc(*rootSpec, c.rootBootnodeIndex)
 	c.rootLock.RUnlock()
 	c.rootLock.Lock()
 	c.rootBootnodeIndex = (c.rootBootnodeIndex + 1) % len(rootSpec.BootNodes)
@@ -302,7 +313,7 @@ func (c *SubstrateConnector) ListenForEvents(results chan string, assetEval bool
 	}
 
 	c.rootLock.RLock()
-	api, err := c.getSubstrateApi(*rootSpec, c.rootBootnodeIndex)
+	api, err := c.getSubstrateApiFunc(*rootSpec, c.rootBootnodeIndex)
 	c.rootLock.RUnlock()
 
 	if err != nil {
@@ -420,7 +431,7 @@ func (c *SubstrateConnector) getTldFromRoot(rootSpec ChainSpecRes, keyParam stri
 	}
 
 	c.rootLock.RLock()
-	api, err := c.getSubstrateApi(rootSpec, c.rootBootnodeIndex)
+	api, err := c.getSubstrateApiFunc(rootSpec, c.rootBootnodeIndex)
 	c.rootLock.RUnlock()
 	c.rootLock.Lock()
 	c.rootBootnodeIndex = (c.rootBootnodeIndex + 1) % len(rootSpec.BootNodes)
@@ -467,7 +478,7 @@ func (c *SubstrateConnector) getTargetFromTld(tldSpec ChainSpecRes, keyParam str
 	}
 
 	c.tldLocks[tldSpec.Id].RLock()
-	api, err := c.getSubstrateApi(tldSpec, c.tldBootnodeIndex[tldSpec.Id])
+	api, err := c.getSubstrateApiFunc(tldSpec, c.tldBootnodeIndex[tldSpec.Id])
 	c.tldLocks[tldSpec.Id].RUnlock()
 	c.tldLocks[tldSpec.Id].Lock()
 	c.tldBootnodeIndex[tldSpec.Id] = (c.tldBootnodeIndex[tldSpec.Id] + 1) % len(tldSpec.BootNodes)
@@ -492,7 +503,7 @@ func (c *SubstrateConnector) getTargetFromTld(tldSpec ChainSpecRes, keyParam str
 
 // getStorageKey generates a storage key for accessing on-chain data.
 func (c *SubstrateConnector) getStorageKey(spec ChainSpecRes, bootNodeIndex int, module, keyMap, keyParam string) (types.StorageKey, error) {
-	api, err := c.getSubstrateApi(spec, bootNodeIndex)
+	api, err := c.getSubstrateApiFunc(spec, bootNodeIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -531,17 +542,29 @@ func parseDomain(domain string) (string, string, error) {
 	if len(parts) < 2 {
 		return "", "", fmt.Errorf("error parsing domain %s", domain)
 	}
-	return parts[0], parts[1], nil
+	// The TLD is the last part
+	tld := parts[len(parts)-1]
+	// The name is everything except the TLD
+	name := strings.Join(parts[:len(parts)-1], ".")
+	return name, tld, nil
 }
 
 // getConnectionAddress constructs a WebSocket connection address from a multiaddress.
 func getConnectionAddress(bootNodeMPAddr string) string {
-	addrSpl := strings.Split(bootNodeMPAddr, "/")
+	// Extract IP and port from multiaddress
+	// Example format: /ip4/127.0.0.1/tcp/9944/ws
+	parts := strings.Split(bootNodeMPAddr, "/")
+	if len(parts) < 6 {
+		// Return a default WebSocket address if the format is invalid
+		return "ws://localhost:9944"
+	}
 
-	addr := addrSpl[2]
-	port := addrSpl[4]
+	// Extract IP (index 2) and port (index 4)
+	ip := parts[2]
+	port := parts[4]
 
-	connAddr := fmt.Sprintf("ws://%s:%s", addr, port)
+	// Construct WebSocket URL
+	connAddr := fmt.Sprintf("ws://%s:%s", ip, port)
 
 	return connAddr
 }

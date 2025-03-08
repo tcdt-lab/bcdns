@@ -27,7 +27,11 @@ func getHTTPClient() *http.Client {
 }
 
 // FetchChainSpecJSON fetches the chain spec JSON from the given URL
-func FetchChainSpecJSON(chainSpecUrl string) (*ChainSpecRes, error) {
+// This is a variable to allow for mocking in tests
+var FetchChainSpecJSON = fetchChainSpecJSON
+
+// fetchChainSpecJSON fetches the chain spec JSON from the given URL
+func fetchChainSpecJSON(chainSpecUrl string) (*ChainSpecRes, error) {
 	// Replace "json_server" with "localhost" in the URL
 	url := strings.Replace(chainSpecUrl, "json_server", "localhost", 1)
 
@@ -50,4 +54,14 @@ func FetchChainSpecJSON(chainSpecUrl string) (*ChainSpecRes, error) {
 	}
 
 	return &chainSpec, nil
+}
+
+// TestError is a simple error type for testing
+type TestError struct {
+	Message string
+}
+
+// Error implements the error interface
+func (e *TestError) Error() string {
+	return e.Message
 }

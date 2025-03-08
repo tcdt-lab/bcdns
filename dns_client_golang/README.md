@@ -106,3 +106,15 @@ Listens for blockchain events and processes specific module events. Used for eva
 
 ---
 
+## Testing
+
+The project includes unit tests for various components. The tests are designed to verify the functionality of the DNS client without requiring a connection to the actual blockchain network.
+
+### Running Tests
+
+To run all tests in the project:
+
+```bash
+go test ./... -v
+```
+
