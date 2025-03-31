@@ -4,6 +4,7 @@
     "@polkadot/ui-keyring": "^3.6.6",
     "@substrate/connect": "^0.8.11",
     "axios": "^1.7.2",
+    "express": "^4.18.3",
     "uuidv4": "^6.2.13",
     "ws": "^8.17.0"
   },
