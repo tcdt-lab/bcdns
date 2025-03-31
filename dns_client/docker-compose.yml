@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  bcdns-web:
+    build: .
+    environment:
+      - BCDNS_MODE=web
+      - BCDNS_WEB_PORT=3000
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  bcdns-cli:
+    build: .
+    environment:
+      - BCDNS_MODE=cli
+    stdin_open: true # docker run -i
+    tty: true       # docker run -t
+
+  bcdns-onetime:
+    build: .
+    environment:
+      - BCDNS_MODE=onetime
+    # Override the default command to allow passing arguments
+    entrypoint: ["npm", "start", "--"]
+    # Default command (can be overridden via command line)
+    command: ["domain", "example.com"]
