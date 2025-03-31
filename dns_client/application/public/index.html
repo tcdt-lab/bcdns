@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>BCDNS Resolver</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>BCDNS Resolver</h1>
+        
+        <div class="resolver-section">
+            <h2>Domain Resolution</h2>
+            <div class="input-group">
+                <input type="text" id="domainInput" placeholder="Enter domain name">
+                <button onclick="resolveDomain()">Resolve</button>
+            </div>
+            <div id="domainResult" class="result"></div>
+        </div>
+
+        <div class="resolver-section">
+            <h2>Asset Resolution</h2>
+            <div class="input-group">
+                <input type="text" id="assetInput" placeholder="Enter asset name">
+                <button onclick="resolveAsset()">Resolve</button>
+            </div>
+            <div id="assetResult" class="result"></div>
+        </div>
+    </div>
+    <script src="/web/client.js"></script>
+</body>
+</html>
