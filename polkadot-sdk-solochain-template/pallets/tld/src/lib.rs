@@ -83,6 +83,8 @@ pub mod pallet {
         type MaxChainSpecSize: Get<u32>;
         #[pallet::constant]
         type MaxMaintainerSize: Get<u32>;
+        #[pallet::constant]
+        type ExpiryBlocks: Get<u32>;
     }
 
     // Type aliases
@@ -195,7 +197,6 @@ pub mod pallet {
             domain_name: DomainName<T>,
             chain_spec: ChainSpec<T>,
             maintainer: Maintainer<T>,
-            expiry: BlockNumberFor<T>,
         ) -> DispatchResult {
             let who = ensure_signed(origin)?;
 
@@ -208,6 +209,9 @@ pub mod pallet {
 
             let domain_info = DomainInfo::new(who.clone(), chain_spec, maintainer, false);
             DomainMap::<T>::insert(&domain_name, &domain_info);
+            
+            // Set expiry to current block + configured expiry blocks
+            let expiry = frame_system::Pallet::<T>::block_number() + T::ExpiryBlocks::get().into();
             DomainExpiry::<T>::insert(&domain_name, expiry);
 
             // Emit domain registered event

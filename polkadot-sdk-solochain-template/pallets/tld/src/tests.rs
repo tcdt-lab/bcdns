@@ -16,14 +16,12 @@ fn register_domain_works() {
             .unwrap();
         let maintainer: BoundedVec<u8, <Test as Config>::MaxMaintainerSize> =
             "maintainer_id".as_bytes().to_vec().try_into().unwrap();
-        let expiry = 100u64;
 
         assert_ok!(TldModule::register_domain(
             RuntimeOrigin::signed(1),
             domain_name.clone(),
             chain_spec,
-            maintainer,
-            expiry
+            maintainer
         ));
 
         assert!(DomainMap::<Test>::contains_key(&domain_name));
@@ -48,14 +46,12 @@ fn amend_chainspec_works() {
                 .unwrap();
         let maintainer: BoundedVec<u8, <Test as Config>::MaxMaintainerSize> =
             "maintainer_id".as_bytes().to_vec().try_into().unwrap();
-        let expiry = 100u64;
 
         TldModule::register_domain(
             RuntimeOrigin::signed(1),
             domain_name.clone(),
             chain_spec,
             maintainer,
-            expiry,
         )
         .unwrap();
         assert_ok!(TldModule::amend_chainspec(
@@ -81,14 +77,12 @@ fn revoke_domain_works() {
             .unwrap();
         let maintainer: BoundedVec<u8, <Test as Config>::MaxMaintainerSize> =
             "maintainer_id".as_bytes().to_vec().try_into().unwrap();
-        let expiry = 100u64;
 
         TldModule::register_domain(
             RuntimeOrigin::signed(1),
             domain_name.clone(),
             chain_spec,
             maintainer,
-            expiry,
         )
         .unwrap();
         assert_ok!(TldModule::revoke_domain(
@@ -111,7 +105,6 @@ fn test_initiate_transfer() {
             b"example-spec".to_vec().try_into().unwrap();
         let maintainer: BoundedVec<u8, <Test as Config>::MaxMaintainerSize> =
             b"maintainer".to_vec().try_into().unwrap();
-        let expiry = 200;
 
         // Register the domain
         assert_ok!(TldModule::register_domain(
@@ -119,7 +112,6 @@ fn test_initiate_transfer() {
             domain_name.clone(),
             chain_spec,
             maintainer,
-            expiry,
         ));
 
         // Ensure the domain exists
@@ -152,7 +144,6 @@ fn test_accept_transfer() {
             b"example-spec".to_vec().try_into().unwrap();
         let maintainer: BoundedVec<u8, <Test as Config>::MaxMaintainerSize> =
             b"maintainer".to_vec().try_into().unwrap();
-        let expiry = 200;
 
         // Register the domain
         assert_ok!(TldModule::register_domain(
@@ -160,7 +151,6 @@ fn test_accept_transfer() {
             domain_name.clone(),
             chain_spec,
             maintainer,
-            expiry,
         ));
 
         // Ensure the domain exists
@@ -199,7 +189,6 @@ fn test_revoke_transfer() {
             b"example-spec".to_vec().try_into().unwrap();
         let maintainer: BoundedVec<u8, <Test as Config>::MaxMaintainerSize> =
             b"maintainer".to_vec().try_into().unwrap();
-        let expiry = 200;
 
         // Register the domain
         assert_ok!(TldModule::register_domain(
@@ -207,7 +196,6 @@ fn test_revoke_transfer() {
             domain_name.clone(),
             chain_spec,
             maintainer,
-            expiry,
         ));
 
         // Ensure the domain exists
@@ -242,7 +230,6 @@ fn test_initiate_transfer_no_permission() {
             b"example-spec".to_vec().try_into().unwrap();
         let maintainer: BoundedVec<u8, <Test as Config>::MaxMaintainerSize> =
             b"maintainer".to_vec().try_into().unwrap();
-        let expiry = 200;
 
         // Register the domain
         assert_ok!(TldModule::register_domain(
@@ -250,7 +237,6 @@ fn test_initiate_transfer_no_permission() {
             domain_name.clone(),
             chain_spec,
             maintainer,
-            expiry,
         ));
 
         // Attempt to initiate a transfer with an invalid account
@@ -277,7 +263,6 @@ fn test_accept_transfer_no_permission() {
             b"example-spec".to_vec().try_into().unwrap();
         let maintainer: BoundedVec<u8, <Test as Config>::MaxMaintainerSize> =
             b"maintainer".to_vec().try_into().unwrap();
-        let expiry = 200;
 
         // Register the domain
         assert_ok!(TldModule::register_domain(
@@ -285,7 +270,6 @@ fn test_accept_transfer_no_permission() {
             domain_name.clone(),
             chain_spec,
             maintainer,
-            expiry,
         ));
 
         // Initiate a transfer

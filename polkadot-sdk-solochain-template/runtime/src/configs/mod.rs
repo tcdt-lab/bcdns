@@ -176,4 +176,5 @@ impl pallet_tld::Config for Runtime {
     type MaxDomainLength = ConstU32<64>;
     type MaxChainSpecSize = ConstU32<256>;
     type MaxMaintainerSize = ConstU32<128>;
+    type ExpiryBlocks = ConstU32<1000>;
 }
