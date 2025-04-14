@@ -29,19 +29,19 @@ type TldRes struct {
 
 // SubstrateConnector is responsible for managing interactions with Substrate nodes.
 type SubstrateConnector struct {
-	rootSpecUrl         string
-	apiCache            map[string]*gsrpc.SubstrateAPI
-	rootBootnodeIndex   int
-	tldBootnodeIndex    map[string]int
-	metadataRegistry    map[string]*types.Metadata
-	useCache            bool
-	m                   sync.RWMutex
-	rootLock            sync.RWMutex
-	tldLocks            map[string]*sync.RWMutex
+	rootSpecSource    string
+	apiCache          map[string]*gsrpc.SubstrateAPI
+	rootBootnodeIndex int
+	tldBootnodeIndex  map[string]int
+	metadataRegistry  map[string]*types.Metadata
+	useCache          bool
+	m                 sync.RWMutex
+	rootLock          sync.RWMutex
+	tldLocks          map[string]*sync.RWMutex
 	// Function fields for easier testing
-	getTldFromRootFunc  func(rootSpec ChainSpecRes, keyParam string) (*TldRes, error)
+	getTldFromRootFunc   func(rootSpec ChainSpecRes, keyParam string) (*TldRes, error)
 	getTargetFromTldFunc func(tldSpec ChainSpecRes, keyParam string) (*DomainRes, error)
-	getSubstrateApiFunc func(spec ChainSpecRes, bootNodeIndex int) (*gsrpc.SubstrateAPI, error)
+	getSubstrateApiFunc  func(spec ChainSpecRes, bootNodeIndex int) (*gsrpc.SubstrateAPI, error)
 }
 
 var (
@@ -51,7 +51,7 @@ var (
 // NewSubstrateConnector creates and initializes a new SubstrateConnector.
 func NewSubstrateConnector(useCache bool) *SubstrateConnector {
 	connector := &SubstrateConnector{
-		rootSpecUrl:       os.Getenv("ROOT_SPEC_URL"),
+		rootSpecSource:    os.Getenv("ROOT_SPEC_SOURCE"),
 		apiCache:          make(map[string]*gsrpc.SubstrateAPI),
 		rootBootnodeIndex: 0,
 		tldBootnodeIndex:  make(map[string]int),
@@ -59,12 +59,12 @@ func NewSubstrateConnector(useCache bool) *SubstrateConnector {
 		useCache:          useCache,
 		tldLocks:          make(map[string]*sync.RWMutex),
 	}
-	
+
 	// Set default function implementations
 	connector.getTldFromRootFunc = connector.getTldFromRoot
 	connector.getTargetFromTldFunc = connector.getTargetFromTld
 	connector.getSubstrateApiFunc = connector.getSubstrateApi
-	
+
 	return connector
 }
 
@@ -102,7 +102,7 @@ func (c *SubstrateConnector) resolveTldSpec(tld string, eval bool) (*ChainSpecRe
 	)
 
 	if !eval || rootSpecCache == nil {
-		rootSpec, err = FetchChainSpecJSON(c.rootSpecUrl)
+		rootSpec, err = FetchChainSpecJSON(c.rootSpecSource)
 		rootSpecCache = rootSpec
 	} else {
 		rootSpec = rootSpecCache
@@ -171,7 +171,7 @@ func (c *SubstrateConnector) RegisterAsset(domain, assetName string, nonce uint3
 	)
 
 	if rootSpecCache == nil {
-		rootSpec, err = FetchChainSpecJSON(c.rootSpecUrl)
+		rootSpec, err = FetchChainSpecJSON(c.rootSpecSource)
 
 		if err != nil {
 			panic(err)
@@ -301,7 +301,7 @@ func (c *SubstrateConnector) ListenForEvents(results chan string, assetEval bool
 	)
 
 	if rootSpecCache == nil {
-		rootSpec, err = FetchChainSpecJSON(c.rootSpecUrl)
+		rootSpec, err = FetchChainSpecJSON(c.rootSpecSource)
 
 		if err != nil {
 			panic(err)
@@ -379,8 +379,6 @@ func (c *SubstrateConnector) ListenForEvents(results chan string, assetEval bool
 		panic(err)
 	}
 	defer sub.Unsubscribe()
-
-	fmt.Println("WE ARE SUBSCRIBING NOW")
 
 	for {
 		set := <-sub.Chan()

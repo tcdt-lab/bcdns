@@ -62,7 +62,7 @@ func TestFetchSingleSpec(t *testing.T) {
 			}
 
 			// Call the function under test
-			idx, duration := fetchSingleSpec(tc.domain, tc.idx, mockConnector, tc.evalFlag)
+			idx, duration := fetchSingleSpec(tc.domain, tc.idx, mockConnector, tc.evalFlag, false)
 
 			// Verify results
 			if idx != tc.idx {
@@ -98,6 +98,6 @@ func TestFetchSingleSpec(t *testing.T) {
 		}()
 
 		// This should panic
-		fetchSingleSpec("example.com", 1, mockConnector, false)
+		fetchSingleSpec("example.com", 1, mockConnector, false, false)
 	})
 }

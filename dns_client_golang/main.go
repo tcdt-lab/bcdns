@@ -12,20 +12,19 @@ import (
 	"github.com/khalidzahra/dns_client/substrate"
 )
 
-func fetchSingleSpec(domain string, idx int, connector substrate.SubstrateInterface, eval bool) (int, int64) {
+func fetchSingleSpec(domain string, idx int, connector substrate.SubstrateInterface, eval, prefetch bool) (int, int64) {
 	start := time.Now()
-	fmt.Println(start.UnixMilli())
 	target, err := connector.ResolveDomain(domain, eval)
 	if err != nil {
 		panic(err)
 	}
 	duration := time.Since(start).Milliseconds() // For evaluation
-	fmt.Println(time.Now().UnixMilli())
-	fmt.Println(duration)
-	fmt.Println("================================================================")
-	fmt.Println("		FOUND TARGET CHAIN SPEC")
-	fmt.Println("================================================================")
-	fmt.Println(target.Id)
+	if !prefetch {
+		fmt.Println("================================================================")
+		fmt.Println("		FOUND TARGET CHAIN SPEC")
+		fmt.Println("================================================================")
+		fmt.Printf("%+v\n", target)
+	}
 	return idx, duration
 }
 
@@ -36,11 +35,11 @@ func fetchSpec(domain string, runs, runsPerSecond int, outFile string, evalFlag,
 	connector := substrate.NewSubstrateConnector(useCache)
 
 	for i := 0; i < 32; i++ { // pre-fetch for caching
-		_, _ = fetchSingleSpec(domain, i, connector, evalFlag)
+		_, _ = fetchSingleSpec(domain, i, connector, evalFlag, true)
 	}
 
 	eval.RunFuncPerSecond(func(currentRun int, wg *sync.WaitGroup) {
-		idx, time := fetchSingleSpec(domain, currentRun, connector, evalFlag)
+		idx, time := fetchSingleSpec(domain, currentRun, connector, evalFlag, false)
 		wg.Done()
 		resultChan <- &eval.EvalResult{Idx: idx, Time: time}
 	}, runs, runsPerSecond)

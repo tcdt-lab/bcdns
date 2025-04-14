@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -30,19 +32,44 @@ func getHTTPClient() *http.Client {
 // This is a variable to allow for mocking in tests
 var FetchChainSpecJSON = fetchChainSpecJSON
 
-// fetchChainSpecJSON fetches the chain spec JSON from the given URL
-func fetchChainSpecJSON(chainSpecUrl string) (*ChainSpecRes, error) {
-	// Replace "json_server" with "localhost" in the URL
-	url := strings.Replace(chainSpecUrl, "json_server", "localhost", 1)
+// fetchChainSpecJSON fetches the chain spec JSON from either a URL or local file path
+func fetchChainSpecJSON(source string) (*ChainSpecRes, error) {
+	// Check if source is a URL (starts with http:// or https://)
+	if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") {
+		// Handle URL case
+		url := strings.Replace(source, "json_server", "localhost", 1)
+		res, err := getHTTPClient().Get(url)
+		if err != nil {
+			return nil, err
+		}
+		defer res.Body.Close()
 
-	// Use the shared HTTP client
-	res, err := getHTTPClient().Get(url)
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		var chainSpec ChainSpecRes
+		err = json.Unmarshal(body, &chainSpec)
+		if err != nil {
+			return nil, err
+		}
+		return &chainSpec, nil
+	}
+
+	// Handle file path case
+	absPath, err := filepath.Abs(source)
 	if err != nil {
 		return nil, err
 	}
-	defer res.Body.Close()
 
-	body, err := io.ReadAll(res.Body)
+	file, err := os.Open(absPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	body, err := io.ReadAll(file)
 	if err != nil {
 		return nil, err
 	}
