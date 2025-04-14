@@ -20,7 +20,7 @@ class NetworkConnector {
     async connectToNetwork(networkSpec) {
         let networkId = this.#extractNetworkId(networkSpec); // Extracts network ID
         let bootNodeList = this.#extractBootNodesFromSpecJson(networkSpec); // Extracts boot nodes
-
+        console.log(`Connecting to network ${networkId} with boot nodes: ${bootNodeList}`);
         // Use cached API if available
         if (this.apiCache[networkId]) {
             console.log(`Using cached API for network ${networkId}`);

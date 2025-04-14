@@ -1,7 +1,6 @@
 async function resolveDomain() {
     const domain = document.getElementById('domainInput').value;
     if (!domain) return;
-
     try {
         const response = await fetch('/resolve/domain', {
             method: 'POST',

@@ -1,5 +1,7 @@
 const {TxType} = require('../util');
 const {Keyring} = require("@polkadot/api");
+const fs = require('fs');
+const path = require('path');
 
 class Transaction {
 
@@ -20,12 +22,28 @@ class Transaction {
             switch (this.txType) {
                 case TxType.TX_ROOT:
                     let tldName = this.api.createType('Vec<u8>', this.txArgs.target);
-                    let tldSpec = this.api.createType('Vec<u8>', this.txArgs.targetSpec);
+                    // Read, parse and filter JSON file for targetSpec
+                    const tldSpecData = JSON.parse(fs.readFileSync(path.resolve(this.txArgs.targetSpec), 'utf8'));
+                    const filteredTldSpec = {
+                        name: tldSpecData.name,
+                        id: tldSpecData.id,
+                        chainType: tldSpecData.chainType,
+                        bootNodes: tldSpecData.bootNodes
+                    };
+                    let tldSpec = this.api.createType('Vec<u8>', JSON.stringify(filteredTldSpec));
                     tx = this.api.tx.rootDNSModule.registerTld(tldName, tldSpec);
                     break;
                 case TxType.TX_TLD:
                     let domainName = this.api.createType('Vec<u8>', this.txArgs.target);
-                    let networkSpec = this.api.createType('Vec<u8>', this.txArgs.targetSpec);
+                    // Read, parse and filter JSON file for targetSpec
+                    const networkSpecData = JSON.parse(fs.readFileSync(path.resolve(this.txArgs.targetSpec), 'utf8'));
+                    const filteredNetworkSpec = {
+                        name: networkSpecData.name,
+                        id: networkSpecData.id,
+                        chainType: networkSpecData.chainType,
+                        bootNodes: networkSpecData.bootNodes
+                    };
+                    let networkSpec = this.api.createType('Vec<u8>', JSON.stringify(filteredNetworkSpec));
                     let maintainer = this.api.createType('Vec<u8>', "maintainer"); // TODO: hardcoded for now
                     tx = this.api.tx.tldModule.registerDomain(domainName, networkSpec, maintainer);
                     break;
@@ -38,7 +56,10 @@ class Transaction {
                 default:
                     throw new Error("Invalid transaction type.");
             }
-            await tx.signAndSend(account);
+            
+            // Get current nonce and increment by 1
+            const nonce = await this.api.rpc.system.accountNextIndex(account.address);
+            await tx.signAndSend(account, { nonce });
         } catch (error) {
             throw error;
         }

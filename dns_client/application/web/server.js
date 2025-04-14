@@ -24,7 +24,7 @@ class WebServer {
         this.app.post('/resolve/domain', async (req, res) => {
             try {
                 const { domain } = req.body;
-                const result = this.resolver.resolve(domain);
+                const result = await this.resolver.resolve(domain);
                 res.json(result);
             } catch (error) {
                 res.status(500).json({ error: error.message });
@@ -34,7 +34,7 @@ class WebServer {
         this.app.post('/resolve/asset', async (req, res) => {
             try {
                 const { asset } = req.body;
-                const result = this.resolver.resolveAsset(asset);
+                const result = await this.resolver.resolveAsset(asset);
                 res.json(result);
             } catch (error) {
                 res.status(500).json({ error: error.message });

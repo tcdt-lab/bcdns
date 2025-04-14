@@ -1,1 +1,1 @@
-exports.ROOT_DNS_NETWORK_SPEC_ADDR = `http://localhost:3000/json/rootSpec.json`;
+exports.ROOT_DNS_NETWORK_SPEC_ADDR = `../polkadot-sdk-solochain-template/all_specs/rootSpec.json`;

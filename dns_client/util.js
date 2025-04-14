@@ -18,18 +18,24 @@ exports.TxType = Object.freeze({
     TX_ASSET_QUERY: 3
 });
 
-exports.getJSONResponse = async (addr, fileName = null) => {
+exports.getJSONResponse = async (source, fileName = null) => {
     try {
-        const url = fileName == null ? addr : `${addr}/${fileName}`
-        const response = await axios.get(url.replace("json_server", "localhost"))
-
-        if (response.status === 200) {
-            console.log(`Retrieved JSON data for ${fileName == null ? addr : fileName}:`)
-            return response.data
+        if (source.startsWith('http://') || source.startsWith('https://')) {
+            const url = fileName == null ? source : `${source}/${fileName}`;
+            const response = await axios.get(url.replace("json_server", "localhost"));
+            
+            if (response.status === 200) {
+                return response.data;
+            }
+        } else {
+            const filePath = fileName == null ? source : path.join(source, fileName);
+            const absPath = path.resolve(filePath);
+            const data = fs.readFileSync(absPath, 'utf8');
+            return JSON.parse(data);
         }
     } catch (error) {
-        console.error(`Error retrieving ${fileName}:`, error.message)
-        return null
+        console.error(`Error retrieving ${fileName || source}:`, error.message);
+        return null;
     }
 };
 
@@ -49,7 +55,7 @@ exports.connectToNetwork = async (bootNodeList) => {
 exports.getTLDSpec = async (tld, rootSpec) => {
     try {
         let api = await this.connector.connectToNetwork(rootSpec);
-        let res = await api.query.dnsModule.tld(tld);
+        let res = await api.query.rootDNSModule.tldMap(tld);
         const chainSpec = res.toHuman().chainSpec;
         return typeof chainSpec === 'string' ? JSON.parse(chainSpec) : chainSpec;
     } catch (err) {
@@ -60,7 +66,7 @@ exports.getTLDSpec = async (tld, rootSpec) => {
 exports.getTargetSpec = async (domain, tldSpec) => {
     try {
         let api = await this.connector.connectToNetwork(tldSpec);
-        let res = await api.query.dnsModule.domain(domain);
+        let res = await api.query.tldModule.domainMap(domain);
         const chainSpec = res.toHuman().chainSpec;
         return typeof chainSpec === 'string' ? JSON.parse(chainSpec) : chainSpec;
     } catch (err) {
