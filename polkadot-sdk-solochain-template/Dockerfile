@@ -11,14 +11,6 @@ RUN apt-get update
 RUN apt-get install -y autoconf automake libtool curl make g++ unzip clang
 RUN apt-get install -y protobuf-compiler
 
-LABEL description="Multistage Docker image for Substrate: a platform for web3" \
-	io.parity.image.type="builder" \
-	io.parity.image.authors="chevdor@gmail.com, devops-team@parity.io" \
-	io.parity.image.vendor="Parity Technologies" \
-	io.parity.image.description="Substrate is a next-generation framework for blockchain innovation 🚀" \
-	io.parity.image.source="https://github.com/paritytech/polkadot-sdk/blob/${VCS_REF}/substrate/docker/substrate_builder.Dockerfile" \
-	io.parity.image.documentation="https://github.com/paritytech/polkadot-sdk"
-
 RUN useradd -m -u 1000 -U -s /bin/sh -d /substrate substrate && \
 	mkdir -p /data /substrate/.local/share/substrate && \
 	chown -R substrate:substrate /data && \
