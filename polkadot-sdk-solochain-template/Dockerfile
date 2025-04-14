@@ -1,28 +1,32 @@
-FROM docker.io/paritytech/ci-unified:latest as builder
+FROM rust:1.78.0
 
-WORKDIR /polkadot
-COPY . /polkadot
+ENV RUST_BACKTRACE 1
 
-RUN cargo fetch
-RUN cargo build --locked --release
+WORKDIR /substrate
+COPY ./target/release/node-template /substrate/target/release/
+COPY ./entrypoint.sh /substrate/
+COPY ./customSpecRaw.json /substrate/
 
-FROM docker.io/parity/base-bin:latest
+RUN apt-get update
+RUN apt-get install -y autoconf automake libtool curl make g++ unzip clang
+RUN apt-get install -y protobuf-compiler
 
-COPY --from=builder /polkadot/target/release/node-template /usr/local/bin
+LABEL description="Multistage Docker image for Substrate: a platform for web3" \
+	io.parity.image.type="builder" \
+	io.parity.image.authors="chevdor@gmail.com, devops-team@parity.io" \
+	io.parity.image.vendor="Parity Technologies" \
+	io.parity.image.description="Substrate is a next-generation framework for blockchain innovation 🚀" \
+	io.parity.image.source="https://github.com/paritytech/polkadot-sdk/blob/${VCS_REF}/substrate/docker/substrate_builder.Dockerfile" \
+	io.parity.image.documentation="https://github.com/paritytech/polkadot-sdk"
 
-USER root
-RUN useradd -m -u 1001 -U -s /bin/sh -d /polkadot polkadot && \
-	mkdir -p /data /polkadot/.local/share && \
-	chown -R polkadot:polkadot /data /polkadot/.local/share && \
-	ln -s /data /polkadot/.local/share/polkadot && \
-# unclutter and minimize the attack surface
-	rm -rf /usr/bin /usr/sbin && \
-# check if executable works in this container
-	/usr/local/bin/node-template --version
+RUN useradd -m -u 1000 -U -s /bin/sh -d /substrate substrate && \
+	mkdir -p /data /substrate/.local/share/substrate && \
+	chown -R substrate:substrate /data && \
+	ln -s /data /substrate/.local/share/substrate && \
+	chmod +x ./entrypoint.sh
 
-USER polkadot
-
-EXPOSE 30333 9933 9944 9615
+USER substrate
+EXPOSE 30333 9933 9944 9945 9615
 VOLUME ["/data"]
 
-ENTRYPOINT ["/usr/local/bin/node-template", "--dev"]
+ENTRYPOINT ["./entrypoint.sh"]
