@@ -59,6 +59,25 @@ cargo build --release
 ./target/release/node-template --dev
 ```
 
+### Deploying the Architecture
+
+[!IMPORTANT]
+The node must be built before running anything in this step!
+
+To deploy the architecture, run the `init.go` script as follows:
+
+```bash
+cd ../polkadot-sdk-solochain-template/scripts && go run init.go --init
+```
+
+The architecture will be launched and can then be interacted with through the dns client applications (try resolving example.com).
+
+Once done, the architecture can be cleaned up using:
+
+```bash 
+go run init.go --cleanup
+```
+
 ### TLD Registration
 
 To register a TLD, you can use the `register_tld` extrinsic provided by the rootdns pallet. The extrinsic can easily be called using the [polkadot explorer](https://polkadot.js.org/apps/#/explorer).
