@@ -69,8 +69,8 @@ describe('Utility Functions', () => {
   describe('getTLDSpec', () => {
     const mockApi = {
       query: {
-        dnsModule: {
-          tld: jest.fn()
+        rootDNSModule: {
+          tldMap: jest.fn()
         }
       }
     };
@@ -97,7 +97,7 @@ describe('Utility Functions', () => {
 
       // Mock successful connection and query
       util.connector.connectToNetwork.mockResolvedValueOnce(mockApi);
-      mockApi.query.dnsModule.tld.mockResolvedValueOnce(mockTldResponse);
+      mockApi.query.rootDNSModule.tldMap.mockResolvedValueOnce(mockTldResponse);
 
       const result = await util.getTLDSpec('com', mockRootSpec);
 
@@ -105,7 +105,7 @@ describe('Utility Functions', () => {
       expect(util.connector.connectToNetwork).toHaveBeenCalledWith(mockRootSpec);
 
       // Verify TLD query was made
-      expect(mockApi.query.dnsModule.tld).toHaveBeenCalledWith('com');
+      expect(mockApi.query.rootDNSModule.tldMap).toHaveBeenCalledWith('com');
 
       // Verify result
       expect(result).toEqual({
@@ -126,7 +126,7 @@ describe('Utility Functions', () => {
     it('should handle TLD query errors', async () => {
       // Mock successful connection but failed query
       util.connector.connectToNetwork.mockResolvedValueOnce(mockApi);
-      mockApi.query.dnsModule.tld.mockRejectedValueOnce(new Error('Query failed'));
+      mockApi.query.rootDNSModule.tldMap.mockRejectedValueOnce(new Error('Query failed'));
 
       await expect(util.getTLDSpec('com', mockRootSpec))
         .rejects
@@ -137,8 +137,8 @@ describe('Utility Functions', () => {
   describe('getTargetSpec', () => {
     const mockApi = {
       query: {
-        dnsModule: {
-          domain: jest.fn()
+        tldModule: {
+          domainMap: jest.fn()
         }
       }
     };
@@ -165,7 +165,7 @@ describe('Utility Functions', () => {
 
       // Mock successful connection and query
       util.connector.connectToNetwork.mockResolvedValueOnce(mockApi);
-      mockApi.query.dnsModule.domain.mockResolvedValueOnce(mockDomainResponse);
+      mockApi.query.tldModule.domainMap.mockResolvedValueOnce(mockDomainResponse);
 
       const result = await util.getTargetSpec('example.com', mockTldSpec);
 
@@ -173,7 +173,7 @@ describe('Utility Functions', () => {
       expect(util.connector.connectToNetwork).toHaveBeenCalledWith(mockTldSpec);
 
       // Verify domain query was made
-      expect(mockApi.query.dnsModule.domain).toHaveBeenCalledWith('example.com');
+      expect(mockApi.query.tldModule.domainMap).toHaveBeenCalledWith('example.com');
 
       // Verify result
       expect(result).toEqual({
@@ -194,7 +194,7 @@ describe('Utility Functions', () => {
     it('should handle domain query errors', async () => {
       // Mock successful connection but failed query
       util.connector.connectToNetwork.mockResolvedValueOnce(mockApi);
-      mockApi.query.dnsModule.domain.mockRejectedValueOnce(new Error('Query failed'));
+      mockApi.query.tldModule.domainMap.mockRejectedValueOnce(new Error('Query failed'));
 
       await expect(util.getTargetSpec('example.com', mockTldSpec))
         .rejects
