@@ -61,8 +61,8 @@ cargo build --release
 
 ### Deploying the Architecture
 
-[!IMPORTANT]
-The node must be built before running anything in this step!
+> [!IMPORTANT]  
+> The node must be built before running anything in this step!
 
 To deploy the architecture, run the `init.go` script as follows:
 
