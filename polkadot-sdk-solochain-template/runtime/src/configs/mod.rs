@@ -35,14 +35,22 @@ use frame_support::{
 use frame_system::limits::{BlockLength, BlockWeights};
 use pallet_transaction_payment::{ConstFeeMultiplier, FungibleAdapter, Multiplier};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_runtime::{traits::One, Perbill};
+use sp_runtime::{
+    generic::Era, 
+    traits::One, 
+    Perbill,
+    MultiSignature,
+    MultiSigner,
+    MultiAddress,
+    SaturatedConversion,
+};
 use sp_version::RuntimeVersion;
-
-// Local module imports
+use crate::{UncheckedExtrinsic, VERSION, System};
+use codec::Encode;
 use super::{
     AccountId, Aura, Balance, Balances, Block, BlockNumber, Hash, Nonce, PalletInfo, Runtime,
     RuntimeCall, RuntimeEvent, RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin, RuntimeTask,
-    System, EXISTENTIAL_DEPOSIT, SLOT_DURATION, VERSION,
+    EXISTENTIAL_DEPOSIT, SLOT_DURATION,
 };
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
@@ -77,8 +85,6 @@ impl frame_system::Config for Runtime {
     type Nonce = Nonce;
     /// The type for hashing blocks and tries.
     type Hash = Hash;
-    /// Maximum number of block number to block hash mappings to keep (oldest pruned first).
-    type BlockHashCount = BlockHashCount;
     /// The weight of database operations that the runtime can invoke.
     type DbWeight = RocksDbWeight;
     /// Version of the runtime.
@@ -88,6 +94,103 @@ impl frame_system::Config for Runtime {
     /// This is used as an identifier of the chain. 42 is the generic substrate prefix.
     type SS58Prefix = SS58Prefix;
     type MaxConsumers = frame_support::traits::ConstU32<16>;
+    /// Maximum number of block number to block hash mappings to keep (oldest pruned first).
+    type BlockHashCount = BlockHashCount;
+}
+
+impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime
+	where
+    RuntimeCall: From<LocalCall>,
+{
+	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
+		call: RuntimeCall,
+		public: Self::Public,
+		account: AccountId,
+		nonce: Nonce,
+	) -> Option<(RuntimeCall, <UncheckedExtrinsic as sp_runtime::traits::Extrinsic>::SignaturePayload)> {
+		// Create the transaction
+		let function = call;
+		
+		// Get the extra data for the transaction
+		let period = 64; // Use a fixed period instead of BlockHashCount
+		let current_block = System::block_number()
+			.saturated_into::<u64>()
+			.saturating_sub(1);
+		let era = Era::mortal(period, current_block);
+		
+		let extra = (
+			frame_system::CheckNonZeroSender::<Runtime>::new(),
+			frame_system::CheckSpecVersion::<Runtime>::new(),
+			frame_system::CheckTxVersion::<Runtime>::new(),
+			frame_system::CheckGenesis::<Runtime>::new(),
+			frame_system::CheckEra::<Runtime>::from(era),
+			frame_system::CheckNonce::<Runtime>::from(nonce),
+			frame_system::CheckWeight::<Runtime>::new(),
+			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(0),
+			frame_metadata_hash_extension::CheckMetadataHash::<Runtime>::new(true),
+		);
+		
+		// Create the signature
+		let raw_payload = (function.clone(), extra.clone(), VERSION.spec_version, VERSION.transaction_version, 
+			System::block_hash(System::block_number().saturating_sub(1)), 
+			(), (), ());
+		
+		let signature = C::sign(&Encode::encode(&raw_payload), public)?;
+		
+		// Create the signed transaction
+		let address = MultiAddress::Id(account);
+		
+		Some((function, (address, signature.into(), extra)))
+	}
+}
+
+impl frame_system::offchain::SigningTypes for Runtime {
+	type Public = MultiSigner;
+	type Signature = MultiSignature;
+}
+
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime where
+	RuntimeCall: From<C>,
+{
+	type Extrinsic = UncheckedExtrinsic;
+	type OverarchingCall = RuntimeCall;
+}
+
+use sp_core::crypto::KeyTypeId;
+/// Defines application identifier for crypto keys of this module.
+///
+/// Every module that deals with signatures needs to declare its unique identifier for
+/// its crypto keys.
+/// When offchain worker is signing transactions it's going to request keys of type
+/// `KeyTypeId` from the keystore and use the ones it finds to sign the transaction.
+/// The keys can be inserted manually via RPC (see `author_insertKey`).
+pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"bcdn");
+
+/// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrappers.
+/// We can use from supported crypto kinds (`sr25519`, `ed25519` and `ecdsa`) and augment
+/// the types with this pallet-specific identifier.
+pub mod crypto {
+	use super::KEY_TYPE;
+	use sp_runtime::traits::Verify;
+    use frame_system::offchain::AppCrypto;
+
+	pub mod app {
+		use sp_runtime::app_crypto::{app_crypto, sr25519};
+		app_crypto!(sr25519, super::KEY_TYPE);
+	}
+
+	/// Identity of the equivocation/misbehavior reporter.
+	pub type ReporterId = app::Public;
+
+	/// An `AppCrypto` type to allow submitting signed transactions using the reporting
+	/// application key as signer.
+	pub struct BcdnsAppCrypto;
+
+	impl AppCrypto<<crate::Signature as Verify>::Signer, crate::Signature> for BcdnsAppCrypto {
+		type RuntimeAppPublic = ReporterId;
+		type GenericSignature = sp_core::sr25519::Signature;
+		type GenericPublic = sp_core::sr25519::Public;
+	}
 }
 
 impl pallet_aura::Config for Runtime {
@@ -177,4 +280,7 @@ impl pallet_tld::Config for Runtime {
     type MaxChainSpecSize = ConstU32<256>;
     type MaxMaintainerSize = ConstU32<128>;
     type ExpiryBlocks = ConstU32<1000>;
+    type RevocationThreshold = ConstU32<3>; // Require 3 observations before auto-revocation
+    type HeartbeatInterval = ConstU32<100>; // Heartbeat required every 100 blocks
+    type AuthorityId = crypto::BcdnsAppCrypto;
 }

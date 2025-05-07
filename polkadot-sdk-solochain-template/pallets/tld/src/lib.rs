@@ -15,20 +15,30 @@
 //! - Register a unique domain name with a chain specification, maintainer details, and an expiration block.
 //! - Update the chain specification for an existing domain.
 //! - Remove expired or invalid domains.
+//! - Send heartbeats to prove domain maintainer is online.
+//! - Report missed heartbeats to trigger revocation.
 //!
 //! ## Extrinsics
 //! - **`register_domain`**: Registers a new domain with specified details.
 //! - **`amend_chainspec`**: Updates the chain specification for an existing domain.
 //! - **`revoke_domain`**: Removes a domain from the registry.
+//! - **`send_heartbeat`**: Sends a heartbeat to prove domain maintainer is online.
+//! - **`report_missed_heartbeat`**: Reports a domain with missed heartbeat.
 //!
 //! ## Storage
 //! - **`DomainMap`**: Maps domain names to their metadata, including creator, chain specification, maintainer, and availability.
 //! - **`DomainExpiry`**: Stores the block number at which a domain registration expires.
+//! - **`ActiveDomains`**: Tracks domains that need heartbeat monitoring.
 //!
 //! ## Events
 //! - **`DomainRegistered`**: Triggered when a domain is successfully registered.
 //! - **`DomainAmended`**: Triggered when a domain's chain specification is updated.
 //! - **`DomainRevoked`**: Triggered when a domain is removed from the registry.
+//! - **`DomainHeartbeat`**: Triggered when a domain's maintainer sends a heartbeat.
+//! - **`DomainExpiredHeartbeat`**: Triggered when a domain's maintainer fails to send a heartbeat.
+//! - **`TransferInitiated`**: Triggered when a domain transfer is initiated.
+//! - **`TransferAccepted`**: Triggered when a domain transfer is accepted.
+//! - **`TransferRevoked`**: Triggered when a domain transfer is revoked.
 //!
 //! ## Errors
 //! - **`DomainNameTooLong`**: The provided domain name exceeds the maximum allowed length.
@@ -38,6 +48,11 @@
 //! - **`DomainNotFound`**: The specified domain does not exist.
 //! - **`DomainExpired`**: The domain registration has expired.
 //! - **`InvalidOwnerId`**: The caller does not own the specified domain.
+//! - **`DuplicatePeerObservation`**: The peer observation already exists.
+//! - **`InvalidUnsignedTransaction`**: The unsigned transaction is invalid.
+//! - **`NotDomainMaintainer`**: The caller is not the maintainer of the domain.
+//! - **`HeartbeatTooSoon`**: The heartbeat is sent too soon.
+//! - **`DuplicateHeartbeatObservation`**: The heartbeat observation already exists.
 //!
 //! ## Usage
 //! 1. **Register a Domain**: Call `register_domain` with a unique domain name, valid chain specification, maintainer details, and an expiration block.
@@ -66,15 +81,22 @@ pub use weights::*;
 #[frame_support::pallet]
 pub mod pallet {
     use crate::{SubstrateWeight, WeightInfo};
-    use frame_support::pallet_prelude::*;
-    use frame_system::pallet_prelude::*;
+	use frame_support::{
+        sp_runtime::Saturating,
+		pallet_prelude::*,
+	};
+	use frame_system::{
+		offchain::{AppCrypto, CreateSignedTransaction, Signer, SendSignedTransaction, SigningTypes},
+		pallet_prelude::*,
+	};
 
     #[pallet::pallet]
     #[pallet::without_storage_info]
     pub struct Pallet<T>(_);
 
     #[pallet::config]
-    pub trait Config: frame_system::Config + TypeInfo {
+    pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config + TypeInfo {
+        /// The identifier type for an offchain worker.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
         type WeightInfo: WeightInfo;
         #[pallet::constant]
@@ -85,6 +107,13 @@ pub mod pallet {
         type MaxMaintainerSize: Get<u32>;
         #[pallet::constant]
         type ExpiryBlocks: Get<u32>;
+        #[pallet::constant]
+        type RevocationThreshold: Get<u32>;
+        /// Maximum number of blocks allowed between heartbeats before a domain is considered inactive
+        #[pallet::constant]
+        type HeartbeatInterval: Get<u32>;
+        /// The type of crypto to use for signing transactions from the offchain worker
+        type AuthorityId: AppCrypto<<Self as SigningTypes>::Public, <Self as SigningTypes>::Signature>;
     }
 
     // Type aliases
@@ -96,8 +125,9 @@ pub mod pallet {
     pub struct DomainInfo<T: Config> {
         pub creator: T::AccountId,     // Account that created the domain
         pub chain_spec: ChainSpec<T>,  // Blockchain chain specification
-        pub maintainer: Maintainer<T>, // Maintainer's details
+        pub maintainer: Maintainer<T>, // Maintainer's details (can be a human-readable identifier)
         pub available: bool,           // Indicates if the domain is active
+        pub last_heartbeat: BlockNumberFor<T>, // Last block when maintainer sent a heartbeat
     }
 
     impl<T: Config> DomainInfo<T> {
@@ -112,6 +142,7 @@ pub mod pallet {
                 chain_spec,
                 maintainer,
                 available,
+                last_heartbeat: frame_system::Pallet::<T>::block_number(),
             }
         }
     }
@@ -121,6 +152,12 @@ pub mod pallet {
     #[pallet::getter(fn domain_map)]
     pub(super) type DomainMap<T: Config> =
         StorageMap<_, Blake2_128Concat, DomainName<T>, DomainInfo<T>, OptionQuery>;
+
+    // Maps maintainers to domains
+    #[pallet::storage]
+    #[pallet::getter(fn maintainer_map)]
+    pub(super) type MaintainerMap<T: Config> = 
+        StorageMap<_, Blake2_128Concat, Maintainer<T>, DomainName<T>, OptionQuery>;
 
     // Tracks the expiration block of each domain
     #[pallet::storage]
@@ -138,6 +175,35 @@ pub mod pallet {
         T::AccountId,  // New owner
         OptionQuery,
     >;
+
+    // Tracks missed heartbeat observations by different nodes
+    #[pallet::storage]
+    #[pallet::getter(fn heartbeat_observations)]
+    pub(super) type HeartbeatObservations<T: Config> = StorageDoubleMap<
+        _,
+        Blake2_128Concat,
+        DomainName<T>,                      // Domain name with missed heartbeat
+        Blake2_128Concat,
+        T::AccountId,                       // Observer account
+        BlockNumberFor<T>,                  // Block when observation was made
+        OptionQuery,
+    >;
+
+    // Counts total missed heartbeat observations for each domain
+    #[pallet::storage]
+    #[pallet::getter(fn heartbeat_observation_count)]
+    pub(super) type HeartbeatObservationCount<T: Config> = StorageMap<
+        _,
+        Blake2_128Concat,
+        DomainName<T>,                      // Domain name
+        u32,                                // Number of unique observers
+        ValueQuery,
+    >;
+
+    // Storage for tracking domains that need heartbeat monitoring
+    #[pallet::storage]
+    #[pallet::getter(fn active_domains)]
+    pub type ActiveDomains<T: Config> = StorageMap<_, Blake2_128Concat, DomainName<T>, BlockNumberFor<T>, OptionQuery>;
 
     // Events emitted by the pallet
     #[pallet::event]
@@ -168,6 +234,29 @@ pub mod pallet {
             domain_name: DomainName<T>, // Domain name transfer revoked
             owner: T::AccountId,        // Owner's account
         },
+        // Event for domain heartbeat
+        DomainHeartbeat {
+            domain_name: DomainName<T>, // Domain name with heartbeat
+            maintainer: T::AccountId,   // Maintainer account
+            block_number: BlockNumberFor<T>, // Block when heartbeat was received
+        },
+        // Event for domain expiry due to missed heartbeats
+        DomainExpiredHeartbeat {
+            domain_name: DomainName<T>, // Domain name that expired
+            maintainer: T::AccountId,   // Maintainer account
+            last_heartbeat: BlockNumberFor<T>, // Last block when heartbeat was received
+        },
+        // Event for missed heartbeat observation
+        HeartbeatMissedObserved {
+            domain_name: DomainName<T>, // Domain name with missed heartbeat
+            observer: T::AccountId,     // Observer account
+            count: u32,                 // Current observation count
+        },
+        // Event for domain revocation due to threshold of missed heartbeat observations
+        DomainRevokedByConsensus {
+            domain_name: DomainName<T>, // Domain name being revoked
+            observation_count: u32,     // Number of observations that triggered revocation
+        },
     }
 
     // Errors emitted by the pallet
@@ -184,7 +273,69 @@ pub mod pallet {
         NoPendingTransfer,
         NotDomainOwner,
         NotTransferRecipient,
+        DuplicatePeerObservation,
+        InvalidUnsignedTransaction,
+        NotDomainMaintainer,
+        HeartbeatTooSoon,
+        DuplicateHeartbeatObservation,
     }
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn offchain_worker(block_number: BlockNumberFor<T>) {
+			// The offchain worker checks for missed heartbeats and submits observations
+			log::info!("Running offchain worker at block: {:?}", block_number);
+			
+			// Check for domains with missed heartbeats every 10 blocks to avoid excessive processing
+			if block_number % 10u32.into() != 0u32.into() {
+				return;
+			}
+			
+			// Get current block number
+			let current_block = frame_system::Pallet::<T>::block_number();
+			
+			// Iterate through active domains only
+			for (domain_name, last_active_block) in <ActiveDomains<T>>::iter() {
+				let domain_info = match <DomainMap<T>>::get(&domain_name) {
+					Some(info) if info.available => info,
+					_ => continue, // Skip if domain doesn't exist or is unavailable
+				};
+				
+				// Check if heartbeat interval has passed
+				let heartbeat_deadline = last_active_block.saturating_add(T::HeartbeatInterval::get().into());
+				if current_block > heartbeat_deadline {
+					// Domain has missed heartbeats, submit an observation
+					log::info!(
+						"Domain {:?} has missed heartbeat. Last heartbeat at block: {:?}",
+						domain_name,
+						domain_info.last_heartbeat
+					);
+					
+					// Submit a transaction to report the missed heartbeat
+					let call = Call::report_missed_heartbeat { domain_name: domain_name.clone() };
+					
+					// Use a signed transaction for accountability
+					let signer = Signer::<T, T::AuthorityId>::any_account();
+					
+					if let Some((acc, res)) = signer.send_signed_transaction(|_account| call.clone()) {
+						match res {
+							Ok(()) => log::info!(
+								"[{:?}]: Submitted missed heartbeat observation successfully", 
+								acc.id
+							),
+							Err(e) => log::error!(
+								"[{:?}]: Failed to submit missed heartbeat observation: {:?}", 
+								acc.id, 
+								e
+							),
+						}
+					} else {
+						log::error!("No local account available to submit observation");
+					}
+				}
+			}
+		}
+	}
 
     // Pallet's extrinsics (functions callable from outside)
     #[pallet::call]
@@ -200,21 +351,26 @@ pub mod pallet {
         ) -> DispatchResult {
             let who = ensure_signed(origin)?;
 
-            // Ensure domain does not already exist or expired
+            // Ensure domain doesn't already exist
             ensure!(
-                !(DomainMap::<T>::contains_key(&domain_name)
-                    && Pallet::<T>::ensure_not_expired(&domain_name).is_ok()),
+                !<DomainMap<T>>::contains_key(&domain_name),
                 Error::<T>::DomainAlreadyExists
             );
 
-            let domain_info = DomainInfo::new(who.clone(), chain_spec, maintainer, false);
-            DomainMap::<T>::insert(&domain_name, &domain_info);
-            
-            // Set expiry to current block + configured expiry blocks
-            let expiry = frame_system::Pallet::<T>::block_number() + T::ExpiryBlocks::get().into();
-            DomainExpiry::<T>::insert(&domain_name, expiry);
+            // Calculate expiry block
+            let current_block = frame_system::Pallet::<T>::block_number();
+            let expiry_block = current_block.saturating_add(T::ExpiryBlocks::get().into());
 
-            // Emit domain registered event
+            // Create domain info
+            let domain_info = DomainInfo::new(who.clone(), chain_spec, maintainer.clone(), true);
+
+            // Store domain info and expiry
+            <DomainMap<T>>::insert(&domain_name, domain_info);
+            <DomainExpiry<T>>::insert(&domain_name, expiry_block);
+            <MaintainerMap<T>>::insert(&maintainer, domain_name.clone());
+            <ActiveDomains<T>>::insert(&domain_name, current_block);
+
+            // Emit event
             Self::deposit_event(Event::DomainRegistered {
                 domain_name,
                 creator: who,
@@ -233,14 +389,22 @@ pub mod pallet {
         ) -> DispatchResult {
             let who = ensure_signed(origin)?;
 
-            let mut domain_info =
-                DomainMap::<T>::get(&domain_name).ok_or(Error::<T>::DomainNotFound)?;
-            ensure!(who == domain_info.creator, Error::<T>::InvalidOwnerId);
+            // Ensure domain exists and is not expired
+            Self::ensure_not_expired(&domain_name)?;
 
+            // Get domain info
+            let mut domain_info = <DomainMap<T>>::get(&domain_name).ok_or(Error::<T>::DomainNotFound)?;
+
+            // Ensure caller is domain owner
+            ensure!(domain_info.creator == who, Error::<T>::InvalidOwnerId);
+
+            // Update chain spec
             domain_info.chain_spec = chain_spec;
-            DomainMap::<T>::insert(&domain_name, domain_info);
 
-            // Emit domain amended event
+            // Update domain info
+            <DomainMap<T>>::insert(&domain_name, domain_info);
+
+            // Emit event
             Self::deposit_event(Event::DomainAmended {
                 domain_name,
                 editor: who,
@@ -255,14 +419,19 @@ pub mod pallet {
         pub fn revoke_domain(origin: OriginFor<T>, domain_name: DomainName<T>) -> DispatchResult {
             let who = ensure_signed(origin)?;
 
-            let domain_info =
-                DomainMap::<T>::get(&domain_name).ok_or(Error::<T>::DomainNotFound)?;
-            ensure!(who == domain_info.creator, Error::<T>::InvalidOwnerId);
+            // Ensure domain exists
+            let domain_info = <DomainMap<T>>::get(&domain_name).ok_or(Error::<T>::DomainNotFound)?;
 
-            DomainMap::<T>::remove(&domain_name);
-            DomainExpiry::<T>::remove(&domain_name);
+            // Ensure caller is domain owner
+            ensure!(domain_info.creator == who, Error::<T>::InvalidOwnerId);
 
-            // Emit domain revoked event
+            // Remove domain mappings
+            <DomainMap<T>>::remove(&domain_name);
+            <DomainExpiry<T>>::remove(&domain_name);
+            <MaintainerMap<T>>::remove(&domain_info.maintainer);
+            <ActiveDomains<T>>::remove(&domain_name);
+
+            // Emit event
             Self::deposit_event(Event::DomainRevoked {
                 domain_name,
                 revoker: who,
@@ -352,16 +521,150 @@ pub mod pallet {
 
             Ok(())
         }
+
+        // Send a heartbeat to prove domain maintainer is online
+        #[pallet::call_index(6)]
+        #[pallet::weight(<SubstrateWeight<T> as WeightInfo>::benchmark_send_heartbeat())]
+        pub fn send_heartbeat(
+            origin: OriginFor<T>,
+            domain_name: DomainName<T>,
+        ) -> DispatchResult {
+            let who = ensure_signed(origin)?;
+
+            // Ensure domain exists
+            let mut domain_info = <DomainMap<T>>::get(&domain_name).ok_or(Error::<T>::DomainNotFound)?;
+
+            // Ensure caller is domain owner
+            ensure!(domain_info.creator == who, Error::<T>::NotDomainMaintainer);
+
+            // Get current block number
+            let current_block = frame_system::Pallet::<T>::block_number();
+            
+            // Ensure heartbeat isn't sent too frequently (optional rate limiting)
+            let min_interval = T::HeartbeatInterval::get() / 10; // Allow heartbeats at 1/10th of interval
+            ensure!(
+                current_block > domain_info.last_heartbeat.saturating_add(min_interval.into()),
+                Error::<T>::HeartbeatTooSoon
+            );
+
+            // Update last heartbeat time
+            domain_info.last_heartbeat = current_block;
+            
+            // Extend domain expiry
+            let new_expiry = current_block.saturating_add(T::ExpiryBlocks::get().into());
+            <DomainExpiry<T>>::insert(&domain_name, new_expiry);
+            
+            // Update domain info
+            <DomainMap<T>>::insert(&domain_name, domain_info);
+            <ActiveDomains<T>>::insert(&domain_name, current_block);
+
+            // Emit heartbeat event
+            Self::deposit_event(Event::DomainHeartbeat {
+                domain_name,
+                maintainer: who,
+                block_number: current_block,
+            });
+
+            Ok(())
+        }
+
+        // Report a domain with missed heartbeat
+        #[pallet::call_index(7)]
+        #[pallet::weight(<SubstrateWeight<T> as WeightInfo>::benchmark_report_missed_heartbeat())]
+        pub fn report_missed_heartbeat(
+            origin: OriginFor<T>,
+            domain_name: DomainName<T>,
+        ) -> DispatchResult {
+            let who = ensure_signed(origin)?;
+
+            // Ensure domain exists
+            let domain_info = <DomainMap<T>>::get(&domain_name).ok_or(Error::<T>::DomainNotFound)?;
+            
+            // Get current block number
+            let current_block = frame_system::Pallet::<T>::block_number();
+            
+            // Check if heartbeat is actually missed
+            let heartbeat_deadline = domain_info.last_heartbeat.saturating_add(T::HeartbeatInterval::get().into());
+            ensure!(current_block > heartbeat_deadline, Error::<T>::HeartbeatTooSoon);
+            
+            // Check if observation already exists
+            ensure!(
+                !HeartbeatObservations::<T>::contains_key(&domain_name, &who),
+                Error::<T>::DuplicateHeartbeatObservation
+            );
+
+            // Insert heartbeat observation
+            HeartbeatObservations::<T>::insert(&domain_name, &who, current_block);
+
+            // Update heartbeat observation count
+            let mut count = HeartbeatObservationCount::<T>::get(&domain_name);
+            count = count.saturating_add(1);
+            HeartbeatObservationCount::<T>::insert(&domain_name, count);
+
+            // Emit heartbeat missed observed event
+            Self::deposit_event(Event::HeartbeatMissedObserved {
+                domain_name: domain_name.clone(),
+                observer: who,
+                count,
+            });
+
+            // Check if revocation threshold is reached
+            if count >= T::RevocationThreshold::get() {
+                // Mark domain as unavailable
+                let mut updated_info = domain_info.clone();
+                updated_info.available = false;
+                <DomainMap<T>>::insert(&domain_name, updated_info);
+                
+                // Emit domain revoked by consensus event
+                Self::deposit_event(Event::DomainRevokedByConsensus {
+                    domain_name: domain_name.clone(),
+                    observation_count: count,
+                });
+                
+                log::info!(
+                    "Domain {:?} revoked by consensus with {:?} observations",
+                    domain_name,
+                    count
+                );
+            }
+
+            Ok(())
+        }
     }
 
     impl<T: Config> Pallet<T> {
         // Ensure that the domain has not expired
-        fn ensure_not_expired(domain_name: &DomainName<T>) -> DispatchResult {
-            let expiry = DomainExpiry::<T>::get(domain_name).ok_or(Error::<T>::DomainNotFound)?;
-            ensure!(
-                frame_system::Pallet::<T>::block_number() < expiry,
-                Error::<T>::DomainExpired
-            );
+        pub(super) fn ensure_not_expired(domain_name: &DomainName<T>) -> DispatchResult {
+            let current_block = frame_system::Pallet::<T>::block_number();
+            
+            // Check if domain exists
+            let domain_info = <DomainMap<T>>::get(domain_name).ok_or(Error::<T>::DomainNotFound)?;
+            
+            // Check if domain is available
+            ensure!(domain_info.available, Error::<T>::DomainExpired);
+            
+            // Check if domain has expired based on expiry block
+            let expiry_block = <DomainExpiry<T>>::get(domain_name).ok_or(Error::<T>::DomainExpired)?;
+            ensure!(current_block <= expiry_block, Error::<T>::DomainExpired);
+            
+            // Check if heartbeat is still valid
+            let heartbeat_deadline = domain_info.last_heartbeat.saturating_add(T::HeartbeatInterval::get().into());
+            if current_block > heartbeat_deadline {
+                // Domain has missed heartbeats, mark it as expired
+                let mut updated_info = domain_info.clone();
+                updated_info.available = false;
+                <DomainMap<T>>::insert(domain_name, updated_info);
+                
+                // Emit domain expired event
+                Self::deposit_event(Event::DomainExpiredHeartbeat {
+                    domain_name: domain_name.clone(),
+                    maintainer: domain_info.creator,
+                    last_heartbeat: domain_info.last_heartbeat,
+                });
+                
+                return Err(Error::<T>::DomainExpired.into());
+            }
+            
             Ok(())
         }
     }
