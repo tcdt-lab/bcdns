@@ -540,8 +540,8 @@ pub mod pallet {
             // Get current block number
             let current_block = frame_system::Pallet::<T>::block_number();
             
-            // Ensure heartbeat isn't sent too frequently (optional rate limiting)
-            let min_interval = T::HeartbeatInterval::get() / 10; // Allow heartbeats at 1/10th of interval
+            // Ensure heartbeat isn't sent too frequently
+            let min_interval = T::HeartbeatInterval::get() / 2; 
             ensure!(
                 current_block > domain_info.last_heartbeat.saturating_add(min_interval.into()),
                 Error::<T>::HeartbeatTooSoon

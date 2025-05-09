@@ -230,4 +230,7 @@ mod runtime {
 
     #[runtime::pallet_index(9)]
     pub type TldModule = pallet_tld;
+
+    #[runtime::pallet_index(10)]
+    pub type AssetDiscoveryModule = pallet_assetdiscovery;
 }

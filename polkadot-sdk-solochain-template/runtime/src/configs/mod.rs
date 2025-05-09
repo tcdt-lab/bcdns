@@ -284,3 +284,12 @@ impl pallet_tld::Config for Runtime {
     type HeartbeatInterval = ConstU32<100>; // Heartbeat required every 100 blocks
     type AuthorityId = crypto::BcdnsAppCrypto;
 }
+
+impl pallet_assetdiscovery::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type WeightInfo = pallet_assetdiscovery::weights::SubstrateWeight<Runtime>;
+    type PalletRootDNS = Runtime;
+    type MaxByteLength = ConstU32<64>; 
+    type MaxItems = ConstU32<100>;
+    type AuthorityId = crypto::BcdnsAppCrypto;
+}
