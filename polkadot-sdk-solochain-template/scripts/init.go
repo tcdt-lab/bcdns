@@ -116,6 +116,16 @@ func setupDNSInfo() {
 	fmt.Printf("Setting up DNS information...")
 
 	cmd := exec.Command("npm",
+		"install")
+	cmd.Dir = "../../dns_client"
+
+	var out, err = cmd.Output()
+
+	if err != nil {
+		fmt.Printf("Error executing command: %v\n", err)
+	}
+
+	cmd = exec.Command("npm",
 		"run",
 		"register",
 		"--",
@@ -125,7 +135,7 @@ func setupDNSInfo() {
 		"//Alice")
 	cmd.Dir = "../../dns_client"
 
-	var out, err = cmd.Output()
+	out, err = cmd.Output()
 
 	if err != nil {
 		fmt.Printf("Error executing command: %v\n", err)
