@@ -66,7 +66,10 @@ func launchArch(setters ...ArchOption) {
 		"--nodes",
 		strconv.Itoa(o.normal_nodes))
 	cmd.Dir = "../"
-	out, _ := cmd.Output()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("Error executing launch_dns_arch.sh: %v\n", err)
+	}
 	fmt.Printf("launch_dns_arch.sh: %s\n", string(out))
 	fmt.Println("Successfully launched DNS architecture.")
 }
@@ -74,7 +77,10 @@ func launchArch(setters ...ArchOption) {
 func cleanArch() {
 	cmd := exec.Command("./dns_arch_cleanup.sh")
 	cmd.Dir = "../"
-	out, _ := cmd.Output()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("Error executing dns_arch_cleanup.sh: %v\n", err)
+	}
 	fmt.Printf("dns_arch_cleanup.sh: %s\n", string(out))
 	fmt.Println("Successfully cleaned up DNS architecture.")
 }
@@ -119,7 +125,7 @@ func setupDNSInfo() {
 		"install")
 	cmd.Dir = "../../dns_client"
 
-	var out, err = cmd.Output()
+	out, err := cmd.CombinedOutput()
 
 	if err != nil {
 		fmt.Printf("Error executing command: %v\n", err)
@@ -135,7 +141,7 @@ func setupDNSInfo() {
 		"//Alice")
 	cmd.Dir = "../../dns_client"
 
-	out, err = cmd.Output()
+	out, err = cmd.CombinedOutput()
 
 	if err != nil {
 		fmt.Printf("Error executing command: %v\n", err)
@@ -154,7 +160,7 @@ func setupDNSInfo() {
 			"//Alice")
 		fillerCmd.Dir = "../../dns_client"
 
-		var fillerOut, fillerErr = fillerCmd.Output()
+		fillerOut, fillerErr := fillerCmd.CombinedOutput()
 
 		if fillerErr != nil {
 			fmt.Printf("Error executing command: %v\n", fillerErr)
@@ -175,7 +181,7 @@ func setupDNSInfo() {
 		"//Alice")
 	cmd.Dir = "../../dns_client"
 
-	out, err = cmd.Output()
+	out, err = cmd.CombinedOutput()
 
 	if err != nil {
 		fmt.Printf("Error executing command: %v\n", err)
@@ -193,7 +199,7 @@ func setupDNSInfo() {
 		"//Alice")
 	cmd.Dir = "../../dns_client"
 
-	out, err = cmd.Output()
+	out, err = cmd.CombinedOutput()
 
 	if err != nil {
 		fmt.Printf("Error executing command: %v\n", err)
@@ -212,7 +218,7 @@ func setupDNSInfo() {
 			"//Alice")
 		fillerCmd.Dir = "../../dns_client"
 
-		out, err = fillerCmd.Output()
+		out, err = fillerCmd.CombinedOutput()
 
 		if err != nil {
 			fmt.Printf("Error executing command: %v\n", err)
