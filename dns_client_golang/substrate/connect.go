@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
@@ -359,12 +360,34 @@ func (c *SubstrateConnector) ListenForEvents(results chan string, assetEval bool
 		Topics []types.Hash
 	}
 
+	type EventRevocationVoteSubmitted struct {
+		Phase  types.Phase
+		Account types.AccountID
+		Domain string
+		Topics []types.Hash
+	}
+
+	type EventDomainHeartbeat struct {
+		Phase  types.Phase
+		Domain string
+		Topics []types.Hash
+	}
+
+	type EventDomainExpiredHeartbeat struct {
+		Phase  types.Phase
+		Domain string
+		Topics []types.Hash
+	}
+
 	type EventRecords struct {
 		types.EventRecords
 		AssetDiscoveryModule_DomainValidationRequested []EventDomainValidationRequested
 		AssetDiscoveryModule_AssetRegisteredForDomain  []EventAssetRegisteredForDomain
 		AssetDiscoveryModule_ExpiredRequestsRemoved    []EventExpiredRequestsRemoved
 		AssetDiscoveryModule_AssetProviderRevoked      []EventAssetProviderRevoked
+		AssetDiscoveryModule_RevocationVoteSubmitted   []EventRevocationVoteSubmitted
+		TLDModule_DomainHeartbeat                     []EventDomainHeartbeat
+		TLDModule_DomainExpiredHeartbeat              []EventDomainExpiredHeartbeat
 	}
 
 	key, err := types.CreateStorageKey(meta, "System", "Events", nil)
@@ -410,6 +433,26 @@ func (c *SubstrateConnector) ListenForEvents(results chan string, assetEval bool
 
 			for _, e := range events.AssetDiscoveryModule_AssetProviderRevoked {
 				fmt.Printf("\tAsset Provider Revoked %v\n\n", e)
+				res := fmt.Sprintf("revoked,%s", e.Domain)
+				results <- res
+			}
+
+			for _, e := range events.AssetDiscoveryModule_RevocationVoteSubmitted {
+				fmt.Printf("\tRevocation Vote Submitted %v\n\n", e)
+				res := fmt.Sprintf("vote,%s", e.Domain)
+				results <- res
+			}
+
+			for _, e := range events.TLDModule_DomainHeartbeat {
+				fmt.Printf("\tDomain Heartbeat %v\n\n", e)
+				res := fmt.Sprintf("heartbeat,%s", e.Domain)
+				results <- res
+			}
+
+			for _, e := range events.TLDModule_DomainExpiredHeartbeat {
+				fmt.Printf("\tDomain Expired Heartbeat %v\n\n", e)
+				res := fmt.Sprintf("expired_heartbeat,%s", e.Domain)
+				results <- res
 			}
 		}
 	}
@@ -565,4 +608,317 @@ func getConnectionAddress(bootNodeMPAddr string) string {
 	connAddr := fmt.Sprintf("ws://%s:%s", ip, port)
 
 	return connAddr
+}
+
+// VoteForDomainRevocation submits a vote to revoke a domain as an asset provider
+func (c *SubstrateConnector) VoteForDomainRevocation(domain string, nonce uint32, results chan string) uint32 {
+
+	var (
+		rootSpec *ChainSpecRes
+		err      error
+	)
+
+	if rootSpecCache == nil {
+		rootSpec, err = FetchChainSpecJSON(c.rootSpecSource)
+
+		if err != nil {
+			panic(err)
+		}
+
+		rootSpecCache = rootSpec
+	} else {
+		rootSpec = rootSpecCache
+	}
+	voteForRevocationTx := "AssetDiscoveryModule.vote_for_domain_revocation"
+
+	c.rootLock.RLock()
+	api, err := c.getSubstrateApiFunc(*rootSpec, c.rootBootnodeIndex)
+	c.rootLock.RUnlock()
+	c.rootLock.Lock()
+	c.rootBootnodeIndex = (c.rootBootnodeIndex + 1) % len(rootSpec.BootNodes)
+	c.rootLock.Unlock()
+
+	if err != nil {
+		panic(err)
+	}
+
+	var meta *types.Metadata
+
+	if _, ok := c.metadataRegistry[rootSpec.Id]; !ok {
+		meta, err = api.RPC.State.GetMetadataLatest()
+		if err != nil {
+			panic(err)
+		}
+		c.metadataRegistry[rootSpec.Id] = meta
+	} else {
+		meta = c.metadataRegistry[rootSpec.Id]
+	}
+
+	domainBytes := []byte(domain)
+	domainParam, err := codec.Encode(domainBytes)
+	if err != nil {
+		panic(err)
+	}
+
+	call, err := types.NewCall(meta, voteForRevocationTx, domainParam)
+	if err != nil {
+		panic(err)
+	}
+
+	keyringPair, err := signature.KeyringPairFromSecret("//Alice", 42)
+	if err != nil {
+		panic(err)
+	}
+
+	ext := types.NewExtrinsic(call)
+
+	rv, err := api.RPC.State.GetRuntimeVersionLatest()
+	if err != nil {
+		panic(err)
+	}
+
+	genesisHash, err := api.RPC.Chain.GetBlockHash(0)
+	if err != nil {
+		panic(err)
+	}
+
+	blockHash, err := api.RPC.Chain.GetBlockHashLatest()
+	if err != nil {
+		panic(err)
+	}
+
+	o := types.SignatureOptions{
+		BlockHash:          blockHash,
+		Era:                types.ExtrinsicEra{IsMortalEra: false},
+		GenesisHash:        genesisHash,
+		Nonce:              types.NewUCompactFromUInt(uint64(nonce)),
+		SpecVersion:        rv.SpecVersion,
+		Tip:                types.NewUCompactFromUInt(0),
+		TransactionVersion: rv.TransactionVersion,
+	}
+
+	err = ext.Sign(keyringPair, o)
+	if err != nil {
+		panic(err)
+	}
+
+	startTime := time.Now()
+	hash, err := api.RPC.Author.SubmitExtrinsic(ext)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("Vote for domain revocation submitted with hash: %#x\n", hash)
+	duration := time.Since(startTime).Milliseconds()
+	results <- fmt.Sprintf("%d,%d", nonce, duration)
+
+	return nonce + 1
+}
+
+// SendHeartbeat sends a heartbeat for a domain to prove the maintainer is online
+func (c *SubstrateConnector) SendHeartbeat(domain string, nonce uint32, results chan string) uint32 {
+	var (
+		rootSpec *ChainSpecRes
+		err      error
+	)
+
+	if rootSpecCache == nil {
+		rootSpec, err = FetchChainSpecJSON(c.rootSpecSource)
+
+		if err != nil {
+			panic(err)
+		}
+
+		rootSpecCache = rootSpec
+	} else {
+		rootSpec = rootSpecCache
+	}
+	sendHeartbeatTx := "TLDModule.send_heartbeat"
+
+	c.rootLock.RLock()
+	api, err := c.getSubstrateApiFunc(*rootSpec, c.rootBootnodeIndex)
+	c.rootLock.RUnlock()
+	c.rootLock.Lock()
+	c.rootBootnodeIndex = (c.rootBootnodeIndex + 1) % len(rootSpec.BootNodes)
+	c.rootLock.Unlock()
+
+	if err != nil {
+		panic(err)
+	}
+
+	var meta *types.Metadata
+
+	if _, ok := c.metadataRegistry[rootSpec.Id]; !ok {
+		meta, err = api.RPC.State.GetMetadataLatest()
+		if err != nil {
+			panic(err)
+		}
+		c.metadataRegistry[rootSpec.Id] = meta
+	} else {
+		meta = c.metadataRegistry[rootSpec.Id]
+	}
+
+	domainBytes := []byte(domain)
+	domainParam, err := codec.Encode(domainBytes)
+	if err != nil {
+		panic(err)
+	}
+
+	call, err := types.NewCall(meta, sendHeartbeatTx, domainParam)
+	if err != nil {
+		panic(err)
+	}
+
+	keyringPair, err := signature.KeyringPairFromSecret("//Alice", 42)
+	if err != nil {
+		panic(err)
+	}
+
+	ext := types.NewExtrinsic(call)
+
+	rv, err := api.RPC.State.GetRuntimeVersionLatest()
+	if err != nil {
+		panic(err)
+	}
+
+	genesisHash, err := api.RPC.Chain.GetBlockHash(0)
+	if err != nil {
+		panic(err)
+	}
+
+	blockHash, err := api.RPC.Chain.GetBlockHashLatest()
+	if err != nil {
+		panic(err)
+	}
+
+	o := types.SignatureOptions{
+		BlockHash:          blockHash,
+		Era:                types.ExtrinsicEra{IsMortalEra: false},
+		GenesisHash:        genesisHash,
+		Nonce:              types.NewUCompactFromUInt(uint64(nonce)),
+		SpecVersion:        rv.SpecVersion,
+		Tip:                types.NewUCompactFromUInt(0),
+		TransactionVersion: rv.TransactionVersion,
+	}
+
+	err = ext.Sign(keyringPair, o)
+	if err != nil {
+		panic(err)
+	}
+
+	startTime := time.Now()
+	hash, err := api.RPC.Author.SubmitExtrinsic(ext)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("Heartbeat submitted with hash: %#x\n", hash)
+	duration := time.Since(startTime).Milliseconds()
+	results <- fmt.Sprintf("%d,%d", nonce, duration)
+
+	return nonce + 1
+}
+
+// ReportMissedHeartbeat reports a domain with missed heartbeat
+func (c *SubstrateConnector) ReportMissedHeartbeat(domain string, nonce uint32, results chan string) uint32 {
+	var (
+		rootSpec *ChainSpecRes
+		err      error
+	)
+
+	if rootSpecCache == nil {
+		rootSpec, err = FetchChainSpecJSON(c.rootSpecSource)
+
+		if err != nil {
+			panic(err)
+		}
+
+		rootSpecCache = rootSpec
+	} else {
+		rootSpec = rootSpecCache
+	}
+	reportMissedHeartbeatTx := "TLDModule.report_missed_heartbeat"
+
+	c.rootLock.RLock()
+	api, err := c.getSubstrateApiFunc(*rootSpec, c.rootBootnodeIndex)
+	c.rootLock.RUnlock()
+	c.rootLock.Lock()
+	c.rootBootnodeIndex = (c.rootBootnodeIndex + 1) % len(rootSpec.BootNodes)
+	c.rootLock.Unlock()
+
+	if err != nil {
+		panic(err)
+	}
+
+	var meta *types.Metadata
+
+	if _, ok := c.metadataRegistry[rootSpec.Id]; !ok {
+		meta, err = api.RPC.State.GetMetadataLatest()
+		if err != nil {
+			panic(err)
+		}
+		c.metadataRegistry[rootSpec.Id] = meta
+	} else {
+		meta = c.metadataRegistry[rootSpec.Id]
+	}
+
+	domainBytes := []byte(domain)
+	domainParam, err := codec.Encode(domainBytes)
+	if err != nil {
+		panic(err)
+	}
+
+	call, err := types.NewCall(meta, reportMissedHeartbeatTx, domainParam)
+	if err != nil {
+		panic(err)
+	}
+
+	keyringPair, err := signature.KeyringPairFromSecret("//Alice", 42)
+	if err != nil {
+		panic(err)
+	}
+
+	ext := types.NewExtrinsic(call)
+
+	rv, err := api.RPC.State.GetRuntimeVersionLatest()
+	if err != nil {
+		panic(err)
+	}
+
+	genesisHash, err := api.RPC.Chain.GetBlockHash(0)
+	if err != nil {
+		panic(err)
+	}
+
+	blockHash, err := api.RPC.Chain.GetBlockHashLatest()
+	if err != nil {
+		panic(err)
+	}
+
+	o := types.SignatureOptions{
+		BlockHash:          blockHash,
+		Era:                types.ExtrinsicEra{IsMortalEra: false},
+		GenesisHash:        genesisHash,
+		Nonce:              types.NewUCompactFromUInt(uint64(nonce)),
+		SpecVersion:        rv.SpecVersion,
+		Tip:                types.NewUCompactFromUInt(0),
+		TransactionVersion: rv.TransactionVersion,
+	}
+
+	err = ext.Sign(keyringPair, o)
+	if err != nil {
+		panic(err)
+	}
+
+	startTime := time.Now()
+	hash, err := api.RPC.Author.SubmitExtrinsic(ext)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("Missed heartbeat report submitted with hash: %#x\n", hash)
+	duration := time.Since(startTime).Milliseconds()
+	results <- fmt.Sprintf("%d,%d", nonce, duration)
+
+	return nonce + 1
 }
