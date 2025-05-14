@@ -1,4 +1,4 @@
-FROM rust:1.78.0
+FROM rust:latest
 
 ENV RUST_BACKTRACE 1
 
