@@ -169,22 +169,24 @@ listenerLoop:
 
 func main() {
 	// Command line args
-	var eval, assetEval, listen, useCache bool
-	var voteRevoke, heartbeat, reportMissed bool
-	var runs, runsPerSecond int
+	var runEval, assetEval, listen, useCache bool
+	var voteRevoke, heartbeat, reportMissed, heartbeatService bool
+	var runs, runsPerSecond, heartbeatInterval int
 	var domain, outFile string
-	
+
 	flag.StringVar(&domain, "domain", "example.com", "Domain to fetch chainspec for")
 	flag.StringVar(&outFile, "outFile", "eval.csv", "Name of file to output eval results")
-	flag.BoolVar(&eval, "eval", false, "Evaluate performance by running multiple times")
+	flag.BoolVar(&runEval, "eval", false, "Evaluate performance by running multiple times")
 	flag.BoolVar(&assetEval, "assetEval", false, "Evaluate asset registration performance by running multiple times")
 	flag.BoolVar(&listen, "listen", false, "Listen to events emitted by the chain")
 	flag.BoolVar(&useCache, "useCache", false, "Use caching for interacting with the chain")
 	flag.BoolVar(&voteRevoke, "voteRevoke", false, "Vote for domain revocation")
 	flag.BoolVar(&heartbeat, "heartbeat", false, "Send heartbeats for a domain")
 	flag.BoolVar(&reportMissed, "reportMissed", false, "Report missed heartbeats for a domain")
+	flag.BoolVar(&heartbeatService, "heartbeatService", false, "Start a continuous heartbeat service for a domain")
 	flag.IntVar(&runs, "runs", 1, "Number of runs for evaluation")
 	flag.IntVar(&runsPerSecond, "rps", 1, "Number of runs per second for evaluation")
+	flag.IntVar(&heartbeatInterval, "heartbeatInterval", 5, "Interval in seconds between heartbeats for the heartbeat service")
 	flag.Parse()
 
 	if assetEval {
@@ -197,7 +199,10 @@ func main() {
 		sendHeartbeats(domain, outFile, runsPerSecond, runs)
 	} else if reportMissed {
 		reportMissedHeartbeats(domain, outFile, runsPerSecond, runs)
+	} else if heartbeatService {
+		fmt.Printf("Starting heartbeat service for domain %s with interval %d seconds...\n", domain, heartbeatInterval)
+		eval.StartHeartbeatService(domain, heartbeatInterval)
 	} else {
-		fetchSpec(domain, runs, runsPerSecond, outFile, eval, useCache)
+		fetchSpec(domain, runs, runsPerSecond, outFile, runEval, useCache)
 	}
 }
