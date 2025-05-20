@@ -291,5 +291,7 @@ impl pallet_assetdiscovery::Config for Runtime {
     type PalletRootDNS = Runtime;
     type MaxByteLength = ConstU32<64>; 
     type MaxItems = ConstU32<100>;
+    type RequestLifetime = ConstU32<1000>;
+    type RevocationThreshold = ConstU32<3>;
     type AuthorityId = crypto::BcdnsAppCrypto;
 }
