@@ -89,6 +89,7 @@ pub mod pallet {
 		offchain::{AppCrypto, CreateSignedTransaction, Signer, SendSignedTransaction, SigningTypes},
 		pallet_prelude::*,
 	};
+    use scale_info::prelude::vec::Vec;
 
     #[pallet::pallet]
     #[pallet::without_storage_info]
@@ -285,6 +286,9 @@ pub mod pallet {
 		fn offchain_worker(block_number: BlockNumberFor<T>) {
 			// The offchain worker checks for missed heartbeats and submits observations
 			log::info!("Running offchain worker at block: {:?}", block_number);
+			
+			// Send heartbeat transactions for domains node maintains
+			Self::send_maintainer_heartbeats(block_number);
 			
 			// Check for domains with missed heartbeats every 10 blocks to avoid excessive processing
 			if block_number % 10u32.into() != 0u32.into() {
@@ -633,6 +637,82 @@ pub mod pallet {
     }
 
     impl<T: Config> Pallet<T> {
+        // Send heartbeat transactions for domains maintained by this node
+        fn send_maintainer_heartbeats(block_number: BlockNumberFor<T>) {
+            // Only send heartbeats every 5 blocks to avoid excessive transactions
+            if block_number % 5u32.into() != 0u32.into() {
+                return;
+            }
+            
+            // Get current block number
+            let current_block = frame_system::Pallet::<T>::block_number();
+            
+            // Get all accounts from the keystore
+            let signer = Signer::<T, T::AuthorityId>::all_accounts();
+            let accounts: Vec<_> = signer.accounts_from_keys().collect();
+            
+            if accounts.is_empty() {
+                log::info!("No accounts available in the keystore for sending heartbeats");
+                return;
+            }
+            
+            log::info!("Found {} accounts in keystore for potential heartbeats", accounts.len());
+            
+            // Iterate through active domains only
+            for (domain_name, _) in <ActiveDomains<T>>::iter() {
+                let domain_info = match <DomainMap<T>>::get(&domain_name) {
+                    Some(info) if info.available => info,
+                    _ => continue, // Skip if domain doesn't exist or is unavailable
+                };
+                
+                // Check if any account is the maintainer of this domain
+                let is_maintainer = accounts.iter().any(|account| domain_info.creator == account.id);
+                
+                if !is_maintainer {
+                    // Skip domains where we're not the maintainer
+                    continue;
+                }
+                
+                log::info!("We are the maintainer for domain: {:?}", domain_name);
+                
+                // Check if it's time to send a heartbeat
+                // Send heartbeat before deadline to prevent expiration
+                let heartbeat_deadline = domain_info.last_heartbeat
+                    .saturating_add(T::HeartbeatInterval::get().into());
+                let should_send_heartbeat = current_block > domain_info.last_heartbeat
+                    .saturating_add((T::HeartbeatInterval::get() / 2).into())
+                    && current_block < heartbeat_deadline;
+                    
+                if should_send_heartbeat {
+                    log::info!("Sending heartbeat for domain: {:?}", domain_name);
+                    
+                    // Create a new signer for each transaction
+                    let signer = Signer::<T, T::AuthorityId>::any_account();
+                    
+                    // Submit a transaction to send a heartbeat
+                    let call = Call::send_heartbeat { domain_name: domain_name.clone() };
+                    
+                    if let Some((acc, res)) = signer.send_signed_transaction(|_account| call.clone()) {
+                        match res {
+                            Ok(()) => log::info!(
+                                "[{:?}]: Sent heartbeat successfully for domain: {:?}", 
+                                acc.id,
+                                domain_name
+                            ),
+                            Err(e) => log::error!(
+                                "[{:?}]: Failed to send heartbeat for domain {:?}: {:?}", 
+                                acc.id,
+                                domain_name,
+                                e
+                            ),
+                        }
+                    } else {
+                        log::error!("No local account available to send heartbeat for domain: {:?}", domain_name);
+                    }
+                }
+            }
+        }
+        
         // Ensure that the domain has not expired
         pub(super) fn ensure_not_expired(domain_name: &DomainName<T>) -> DispatchResult {
             let current_block = frame_system::Pallet::<T>::block_number();
