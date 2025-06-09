@@ -113,6 +113,21 @@ The domain revocation protocol and its conditions are described as follows:
 
 The implementation of the domain revocation extrinsic can be found in the [tld-pallet](./polkadot-sdk-solochain-template/pallets/tld/src/lib.rs#L247-L267).
 
+## Incentive Mechanism
+This architecture introduces a symbiotic maintenance mechanism between beneficiary networks and the discovery infrastructure. Its purpose is to ensure the long-term sustainability and reliability of the discovery services provided to participating networks.
+
+Any network that claims a domain within the discovery architecture is required to contribute a minimum number of nodes to maintain the architecture.
+
+### Mechanism Overview
+
+1. When a network claims a domain, it must provide a list of node identifiers. These nodes act as maintainers of the architecture.
+
+2. Maintainers must periodically submit heartbeat transactions to prove their presence in the network.
+
+3. Off-chain workers poll the chain state periodically to check for missed heartbeats. If found, the worker submits an observation indicating that it has found a maintainer that missed its heartbeat.
+
+4. If a minimum number of observations is achieved, the information of the network associated with the maintainer is removed from the chain state, making the network undiscoverable through the architecture.
+
 ## Testing
 
 Each component has its own set of unit tests, and some contain guides for manual testing as well. The testing guides for each component can be found in the following files:
