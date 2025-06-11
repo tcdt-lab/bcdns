@@ -326,12 +326,10 @@ fn test_send_heartbeat() {
         let initial_heartbeat = initial_domain_info.last_heartbeat;
 
         // Advance blocks to allow for a new heartbeat
-        let min_interval = 10 + 1; // Just advance a few blocks
-        for _ in 0..min_interval {
-            frame_system::Pallet::<Test>::set_block_number(
-                frame_system::Pallet::<Test>::block_number() + 1
-            );
-        }
+        let min_interval = 51; // Must be more than HeartbeatInterval / 2 (50 blocks)
+        frame_system::Pallet::<Test>::set_block_number(
+            frame_system::Pallet::<Test>::block_number() + min_interval
+        );
 
         // Send heartbeat
         assert_ok!(TldModule::send_heartbeat(
