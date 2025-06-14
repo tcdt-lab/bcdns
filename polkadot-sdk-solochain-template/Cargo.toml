@@ -70,3 +70,4 @@ sp-version = { version = "37.0.0", default-features = false }
 substrate-wasm-builder = { version = "24.0.1", default-features = false }
 pallet-rootdns = { path = "./pallets/rootdns", default-features = false }
 pallet-tld = { path = "./pallets/tld", default-features = false }
+pallet-assetdiscovery = { path = "./pallets/assetdiscovery", default-features = false }

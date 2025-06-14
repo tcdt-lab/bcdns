@@ -32,4 +32,5 @@ frame_benchmarking::define_benchmarks!(
     [pallet_template, TemplateModule]
     [pallet_rootdns, RootDNSModule]
     [pallet_tld, TldModule]
+    [pallet_assetdiscovery, AssetDiscoveryModule]
 );

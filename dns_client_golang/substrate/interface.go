@@ -10,6 +10,15 @@ type SubstrateInterface interface {
 
 	// ListenForEvents listens for blockchain events and processes specific module events
 	ListenForEvents(results chan string, assetEval bool, totalRuns int)
+	
+	// VoteForDomainRevocation submits a vote to revoke a domain as an asset provider
+	VoteForDomainRevocation(domain string, nonce uint32, results chan string) uint32
+	
+	// SendHeartbeat sends a heartbeat for a domain to prove the maintainer is online
+	SendHeartbeat(domain string, nonce uint32, results chan string) uint32
+	
+	// ReportMissedHeartbeat reports a domain with missed heartbeat
+	ReportMissedHeartbeat(domain string, nonce uint32, results chan string) uint32
 }
 
 // Ensure SubstrateConnector implements SubstrateInterface

@@ -6,6 +6,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/khalidzahra/dns_client/substrate"
 )
 
 type EvalResult struct {
@@ -69,5 +71,37 @@ func RunFuncPerSecondSync(fn func(int), runs, runsPerSecond int) {
 	for i := 0; i < runs; i++ {
 		<-ticker.C
 		fn(i)
+	}
+}
+
+// StartHeartbeatService starts a goroutine that continuously sends heartbeat transactions
+func StartHeartbeatService(domain string, intervalSeconds int) {
+	connector := substrate.NewSubstrateConnector(true)
+
+	resultsChan := make(chan string, 100)
+
+	nonce := connector.SendHeartbeat(domain, 0, resultsChan)
+	fmt.Printf("Started heartbeat service for domain %s with initial nonce: %d\n", domain, nonce)
+
+	<-resultsChan
+
+	ticker := time.NewTicker(time.Duration(intervalSeconds) * time.Second)
+	defer ticker.Stop()
+
+	heartbeatCount := 1
+
+	for {
+		<-ticker.C
+
+		nonce = connector.SendHeartbeat(domain, nonce, resultsChan)
+
+		<-resultsChan
+
+		fmt.Printf("Sent heartbeat #%d for domain %s at %s\n",
+			heartbeatCount,
+			domain,
+			time.Now().Format(time.RFC3339))
+
+		heartbeatCount++
 	}
 }

@@ -1,8 +1,8 @@
-use crate::{self as pallet_tld};
+use crate::{self as pallet_assetdiscovery};
 use frame_support::pallet_prelude::ConstU32;
 use frame_support::{
     derive_impl,
-    traits::{ConstU16, ConstU64},
+    traits::{ConstU16, ConstU64, Everything},
 };
 use sp_core::{
     sr25519::Signature,
@@ -13,6 +13,7 @@ use sp_runtime::{
     traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify},
     BuildStorage,
 };
+use pallet_rootdns;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -21,13 +22,14 @@ frame_support::construct_runtime!(
     pub enum Test
     {
         System: frame_system,
-        TldModule: pallet_tld,
+        RootDNSModule: pallet_rootdns,
+        AssetDiscovery: pallet_assetdiscovery,
     }
 );
 
 // Add this to your mock.rs file
 use sp_core::crypto::KeyTypeId;
-pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"test");
+pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"bcda");
 
 pub mod crypto {
     use super::KEY_TYPE;
@@ -60,7 +62,7 @@ pub mod crypto {
 
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
-    type BaseCallFilter = frame_support::traits::Everything;
+    type BaseCallFilter = Everything;
     type BlockWeights = ();
     type BlockLength = ();
     type DbWeight = ();
@@ -115,16 +117,49 @@ where
     }
 }
 
-impl pallet_tld::Config for Test {
+impl pallet_rootdns::Config for Test {
     type RuntimeEvent = RuntimeEvent;
-    type WeightInfo = pallet_tld::weights::SubstrateWeight<Test>;
-    type MaxDomainLength = ConstU32<16>;
+    type WeightInfo = pallet_rootdns::weights::SubstrateWeight<Test>;
+    type AdminOrigin = frame_system::EnsureRoot<AccountId>;
+    type MaxTLDNameLength = ConstU32<16>;
     type MaxChainSpecSize = ConstU32<256>;
-    type MaxMaintainerSize = ConstU32<16>;
-    type ExpiryBlocks = ConstU32<1000>;
+    type MinChainSpecSize = ConstU32<16>;
+}
+
+// Simple weight implementation for testing
+pub struct TestWeightInfo;
+impl pallet_assetdiscovery::weights::WeightInfo for TestWeightInfo {
+    fn submit_verified_domain() -> frame_support::weights::Weight {
+        frame_support::weights::Weight::from_parts(10_000, 0)
+    }
+    
+    fn register_asset_for_domain() -> frame_support::weights::Weight {
+        frame_support::weights::Weight::from_parts(10_000, 0)
+    }
+    
+    fn cleanup_revoked_domains() -> frame_support::weights::Weight {
+        frame_support::weights::Weight::from_parts(10_000, 0)
+    }
+    
+    fn remove_expired_pending_requests() -> frame_support::weights::Weight {
+        frame_support::weights::Weight::from_parts(10_000, 0)
+    }
+    
+    fn vote_for_domain_revocation() -> frame_support::weights::Weight {
+        frame_support::weights::Weight::from_parts(10_000, 0)
+    }
+}
+
+// Mock implementation for AssetDiscovery pallet
+impl pallet_assetdiscovery::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type WeightInfo = TestWeightInfo;
+    type PalletRootDNS = Test;
+    type MaxByteLength = ConstU32<64>;
+    type MaxItems = ConstU32<5>; //  Low value for easier testing
     type AuthorityId = crypto::TestAuthId;
-    type RevocationThreshold = ConstU32<3>; // Require 3 observations before auto-revocation
-    type HeartbeatInterval = ConstU32<100>; // Heartbeat required every 100 blocks
+    type RequestLifetime = ConstU32<1000>;
+    type RevocationThreshold = ConstU32<3>;
 }
 
 // Build genesis storage according to the mock runtime.
