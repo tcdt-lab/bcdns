@@ -6,7 +6,6 @@ NODE_KEY=$(cat /substrate/node_key.txt)
 /substrate/target/release/node-template \
   --base-path /substrate \
   --dev \
-  --chain ./customSpecRaw.json \
   --port 30333 \
   --rpc-port 9945 \
   --telemetry-url "wss://telemetry.polkadot.io/submit/ 0" \
